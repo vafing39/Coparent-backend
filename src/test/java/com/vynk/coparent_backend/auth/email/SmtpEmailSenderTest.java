@@ -30,7 +30,7 @@ class SmtpEmailSenderTest {
             mailSender,
             new MailProperties(MailProperties.Mode.SMTP, "Coparent <no-reply@coparent.local>"),
             new AuthProperties("unused", Duration.ofMinutes(15), Duration.ofDays(30),
-                    Duration.ofMinutes(15), Duration.ofMinutes(30), false, "http://localhost:8080"));
+                    Duration.ofMinutes(15), Duration.ofMinutes(30), Duration.ofDays(7), false, "http://localhost:8080"));
     private final User user = new User("julie@example.com", "hash", "Julie");
 
     SmtpEmailSenderTest() {

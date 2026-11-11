@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TokenServiceTest {
 
     private final TokenService tokenService = new TokenService(null, new AuthProperties(
-            "unused", null, null, null, null, false, "http://localhost"));
+            "unused", null, null, null, null, null, false, "http://localhost"));
 
     @Test
     void opaqueTokensAreRandomAndUrlSafe() {

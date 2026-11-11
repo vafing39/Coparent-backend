@@ -16,6 +16,7 @@ public record AuthProperties(
         @NotNull Duration refreshTokenTtl,
         @NotNull Duration emailVerificationTtl,
         @NotNull Duration passwordResetTtl,
+        @NotNull Duration invitationTtl,
         boolean checkCompromisedPasswords,
         @NotBlank String publicBaseUrl
 ) {

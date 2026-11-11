@@ -30,10 +30,11 @@ There is no linter or formatter configured.
 
 ## Architecture
 
-Packages are organized by feature (`user/`, `auth/`), and each feature is split into layer sub-packages: `controller/`, `service/`, `repository/`, `entity/`, `mapper/`, `dto/`. New features follow the same shape.
+Packages are organized by feature (`user/`, `auth/`, `family/`), and each feature is split into layer sub-packages: `controller/`, `service/`, `repository/`, `entity/`, `mapper/`, `dto/`. New features follow the same shape.
 
 - `user/`: `User` (+ `UserIdentity` for future Apple/Google sign-in), `UserService`, `GET /api/v1/users/me`.
 - `auth/`: `/api/v1/auth/**` (signup, login, refresh, logout, email verify/resend, password forgot/reset). `service/` holds `AuthService` (the rules), `TokenService` (JWTs and opaque tokens), `PasswordPolicy` and `RateLimiter` (in-memory, single instance only); `email/` holds `EmailSender`, implemented by `SmtpEmailSender` (`@Async`; an SMTP failure is logged and never fails the request) or `LoggingEmailSender`, selected by `app.mail.mode`.
+- `family/`: onboarding steps 2–5. `FamilyController` (`/api/v1/families`: create, `GET /me`, update, children, `PUT custody-schedule`, invitations) and `InvitationController` (`GET /api/v1/invitations/{token}` public preview, `POST …/accept`). Every family route goes through `FamilyAccess.requireMember`, which answers **404** to non-members, the same as for a family that does not exist. One family per user for now; at most `PARENT_A` + `PARENT_B`. A rhythm is saved as `PROPOSED` (re-saving replaces the user's own pending proposal); validation by parent B belongs to the custody feature. The invitation preview exposes only the inviter's first name, children's first names and ages, and the rhythm.
 - `config/`: `SecurityConfig` (stateless, `/api/v1/auth/**` public except `email/resend` and `email/verify`), typed `AuthProperties` (`app.auth.*`), UTC `Clock` bean.
 - `common/`: `ApiException` + `GlobalExceptionHandler`, so every error is an RFC 9457 `ProblemDetail` with a neutral French message.
 
@@ -62,6 +63,7 @@ These cut across every feature, so keep them in mind when adding code:
 - Dates are stored in UTC and computed/returned for `Europe/Paris` (custody handovers, reminders, DST changes).
   - In migrations, date columns are `DATETIME(6)` with `DEFAULT (UTC_TIMESTAMP(6))`; never `TIMESTAMP` (ends in 2038, time-zone dependent) or `NOW()` (session local time).
   - In entities, map them to `java.time.Instant`, never `LocalDateTime`/`Date`. `hibernate.jdbc.time_zone: UTC` is set in `application.yaml`.
+  - Local calendar values are not instants: a birth date is `DATE` → `LocalDate`, a custody handover time is `TIME` in Europe/Paris wall-clock time → `LocalTime` (e.g. 17:50 stays 17:50 across DST changes). Never store them as UTC.
 - Messages are immutable: no update/delete endpoints, protection at the database level, server timestamps, and a hash chained with the previous message.
 - REST API documented with OpenAPI 3 (the app generates its types from it); real-time over authenticated WebSocket.
 - No personal data in application logs or Sentry; push notification texts never include sensitive content.

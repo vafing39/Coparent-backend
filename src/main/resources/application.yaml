@@ -24,6 +24,7 @@ app:
     refresh-token-ttl: 30d
     email-verification-ttl: 15m  # 8-digit code typed in the app
     password-reset-ttl: 30m
+    invitation-ttl: 7d  # lien d'invitation de l'autre parent
     check-compromised-passwords: true
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
   mail:

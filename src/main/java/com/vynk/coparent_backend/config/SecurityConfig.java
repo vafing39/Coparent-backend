@@ -38,6 +38,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/email/resend", "/api/v1/auth/email/verify")
                         .authenticated()
                         .requestMatchers("/api/v1/auth/**", "/error").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/invitations/*").permitAll() // aperçu avant acceptation
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
         return http.build();
