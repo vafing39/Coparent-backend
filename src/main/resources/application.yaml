@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: Coparent backend
+  datasource:
+    url: jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true
+    username: root
+    password: 40416804
