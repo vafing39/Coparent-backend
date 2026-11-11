@@ -27,6 +27,13 @@ app:
     invitation-ttl: 7d  # lien d'invitation de l'autre parent
     check-compromised-passwords: true
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+  links:  # lien d'invitation ouvert dans l'app (Universal Links / App Links) ; valeurs réelles à fournir
+    app-scheme: coparent
+    ios-app-ids: ${IOS_APP_IDS:TEAMID.org.reactjs.native.example.AwesomeProject}  # <Team ID>.<bundle id>, séparés par des virgules
+    android-package: ${ANDROID_PACKAGE:com.awesomeproject}
+    android-sha256-fingerprints: ${ANDROID_SHA256_FINGERPRINTS:}  # empreintes des certificats de signature
+    app-store-url: ${APP_STORE_URL:}
+    play-store-url: ${PLAY_STORE_URL:}
   mail:
     mode: ${MAIL_MODE:smtp}  # smtp = send through spring.mail.*; log = only write links to the app log
     from: ${MAIL_FROM:Coparent <no-reply@coparent.local>}
