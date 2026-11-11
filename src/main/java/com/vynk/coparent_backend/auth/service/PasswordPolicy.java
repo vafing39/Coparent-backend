@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 
-/** Password rules from the spec: at least 12 characters, and not known as compromised. */
+/** Password rules from the spec: confirmed, at least 12 characters, and not known as compromised. */
 @Component
 @RequiredArgsConstructor
 public class PasswordPolicy {
@@ -18,7 +18,11 @@ public class PasswordPolicy {
 
     private final CompromisedPasswordChecker compromisedPasswordChecker;
 
-    public void validate(String password) {
+    /** @param confirmation the password typed a second time by the user; must be identical */
+    public void validate(String password, String confirmation) {
+        if (!password.equals(confirmation)) {
+            throw ApiException.badRequest("Les mots de passe ne correspondent pas.");
+        }
         if (password.codePointCount(0, password.length()) < MIN_LENGTH) {
             throw ApiException.badRequest("Le mot de passe doit contenir au moins " + MIN_LENGTH + " caractères.");
         }

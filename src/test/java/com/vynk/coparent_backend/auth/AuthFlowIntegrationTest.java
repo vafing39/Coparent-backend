@@ -95,6 +95,7 @@ class AuthFlowIntegrationTest {
         signup(email, PASSWORD).andExpect(status().isConflict());
         signup(randomEmail(), "too-short").andExpect(status().isBadRequest());
         signup("not-an-email", PASSWORD).andExpect(status().isBadRequest());
+        signup(randomEmail(), PASSWORD, PASSWORD + "x").andExpect(status().isBadRequest());
     }
 
     @Test
@@ -150,9 +151,10 @@ class AuthFlowIntegrationTest {
         verify(emailSender).sendPasswordReset(any(User.class), link.capture());
         String newPassword = "another-long-password";
 
-        mvc.perform(post("/api/v1/auth/password/reset").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"token\":\"" + tokenFromLink(link.getValue()) + "\",\"newPassword\":\"" + newPassword + "\"}"))
-                .andExpect(status().isNoContent());
+        String resetToken = tokenFromLink(link.getValue());
+
+        resetPassword(resetToken, newPassword, "different-long-password").andExpect(status().isBadRequest());
+        resetPassword(resetToken, newPassword, newPassword).andExpect(status().isNoContent());
 
         refresh(oldRefresh).andExpect(status().isUnauthorized());
         login(email, PASSWORD).andExpect(status().isUnauthorized());
@@ -171,8 +173,13 @@ class AuthFlowIntegrationTest {
     // --- helpers ---
 
     private ResultActions signup(String email, String password) throws Exception {
+        return signup(email, password, password);
+    }
+
+    private ResultActions signup(String email, String password, String confirmation) throws Exception {
         return mvc.perform(post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\",\"firstName\":\"Julie\"}"));
+                .content("{\"email\":\"" + email + "\",\"password\":\"" + password
+                        + "\",\"confirmPassword\":\"" + confirmation + "\",\"firstName\":\"Julie\"}"));
     }
 
     private ResultActions login(String email, String password) throws Exception {
@@ -183,6 +190,12 @@ class AuthFlowIntegrationTest {
     private ResultActions refresh(String refreshToken) throws Exception {
         return mvc.perform(post("/api/v1/auth/refresh").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"refreshToken\":\"" + refreshToken + "\"}"));
+    }
+
+    private ResultActions resetPassword(String token, String newPassword, String confirmation) throws Exception {
+        return mvc.perform(post("/api/v1/auth/password/reset").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + token + "\",\"newPassword\":\"" + newPassword
+                        + "\",\"confirmPassword\":\"" + confirmation + "\"}"));
     }
 
     private ResultActions forgot(String email) throws Exception {

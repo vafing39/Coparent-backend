@@ -55,7 +55,7 @@ public class AuthService {
     public AuthSession signup(SignupRequest request, String clientIp) {
         rateLimiter.consume(Action.SIGNUP, clientIp);
         String email = normalizeEmail(request.email());
-        passwordPolicy.validate(request.password());
+        passwordPolicy.validate(request.password(), request.confirmPassword());
         if (userRepository.existsByEmail(email)) {
             throw ApiException.conflict("Un compte existe déjà avec cet email.");
         }
@@ -139,7 +139,7 @@ public class AuthService {
     /** Sets the new password and signs out every session of the account. */
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
-        passwordPolicy.validate(request.newPassword());
+        passwordPolicy.validate(request.newPassword(), request.confirmPassword());
         OneTimeToken token = consumeOneTimeToken(request.token(), OneTimeTokenType.PASSWORD_RESET);
         User user = token.getUser();
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
