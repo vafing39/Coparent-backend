@@ -124,14 +124,65 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
-    void emailVerificationLinkVerifiesOnce() throws Exception {
+    void emailVerificationCodeVerifiesOnce() throws Exception {
         String session = signup(randomEmail(), PASSWORD).andReturn().getResponse().getContentAsString();
-        String token = tokenFromLink(captureVerificationLink());
+        String code = captureVerificationCode();
+        assertThat(code).matches("\\d{8}");
 
-        postToken("/api/v1/auth/email/verify", token).andExpect(status().isNoContent());
-        postToken("/api/v1/auth/email/verify", token).andExpect(status().isBadRequest());
+        verifyEmail(session, wrongCode(code)).andExpect(status().isBadRequest());
+        verifyEmail(session, code)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailVerified").value(true));
+        verifyEmail(session, code).andExpect(status().isBadRequest()); // single use
         mvc.perform(get("/api/v1/users/me").header("Authorization", bearer(session)))
                 .andExpect(jsonPath("$.emailVerified").value(true));
+    }
+
+    @Test
+    void emailVerificationRequiresSignInAndEightDigits() throws Exception {
+        String session = signup(randomEmail(), PASSWORD).andReturn().getResponse().getContentAsString();
+        String code = captureVerificationCode();
+
+        mvc.perform(post("/api/v1/auth/email/verify").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isUnauthorized());
+        verifyEmail(session, "1234").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void anotherUsersCodeDoesNotWork() throws Exception {
+        signup(randomEmail(), PASSWORD);
+        String firstCode = captureVerificationCode();
+        String second = signup(randomEmail(), PASSWORD).andReturn().getResponse().getContentAsString();
+
+        verifyEmail(second, firstCode).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void resendingInvalidatesThePreviousCode() throws Exception {
+        String session = signup(randomEmail(), PASSWORD).andReturn().getResponse().getContentAsString();
+        String firstCode = captureVerificationCode();
+
+        mvc.perform(post("/api/v1/auth/email/resend").header("Authorization", bearer(session)))
+                .andExpect(status().isAccepted());
+        String secondCode = captureVerificationCode();
+
+        if (!secondCode.equals(firstCode)) {
+            verifyEmail(session, firstCode).andExpect(status().isBadRequest());
+        }
+        verifyEmail(session, secondCode).andExpect(status().isOk());
+    }
+
+    @Test
+    void emailVerificationAttemptsAreLimited() throws Exception {
+        String session = signup(randomEmail(), PASSWORD).andReturn().getResponse().getContentAsString();
+        String code = captureVerificationCode();
+
+        for (int i = 0; i < 5; i++) {
+            verifyEmail(session, wrongCode(code)).andExpect(status().isBadRequest());
+        }
+        // Even the right code is refused once the limit is reached.
+        verifyEmail(session, code).andExpect(status().isTooManyRequests());
     }
 
     @Test
@@ -203,14 +254,21 @@ class AuthFlowIntegrationTest {
                 .content("{\"email\":\"" + email + "\"}"));
     }
 
-    private ResultActions postToken(String path, String token) throws Exception {
-        return mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{\"token\":\"" + token + "\"}"));
+    private ResultActions verifyEmail(String authResponseJson, String code) throws Exception {
+        return mvc.perform(post("/api/v1/auth/email/verify").header("Authorization", bearer(authResponseJson))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"));
     }
 
-    private String captureVerificationLink() {
-        ArgumentCaptor<String> link = ArgumentCaptor.forClass(String.class);
-        verify(emailSender, atLeastOnce()).sendEmailVerification(any(User.class), link.capture());
-        return link.getValue();
+    /** Code from the latest verification email. */
+    private String captureVerificationCode() {
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(emailSender, atLeastOnce()).sendEmailVerification(any(User.class), code.capture());
+        return code.getValue();
+    }
+
+    /** A different 8-digit code. */
+    private static String wrongCode(String code) {
+        return String.format("%08d", (Integer.parseInt(code) + 1) % 100_000_000);
     }
 
     private static String tokenFromLink(String link) {

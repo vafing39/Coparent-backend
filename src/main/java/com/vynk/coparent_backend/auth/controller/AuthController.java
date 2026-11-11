@@ -6,7 +6,9 @@ import com.vynk.coparent_backend.auth.dto.LoginRequest;
 import com.vynk.coparent_backend.auth.dto.RefreshTokenRequest;
 import com.vynk.coparent_backend.auth.dto.ResetPasswordRequest;
 import com.vynk.coparent_backend.auth.dto.SignupRequest;
-import com.vynk.coparent_backend.auth.dto.TokenRequest;
+import com.vynk.coparent_backend.auth.dto.VerifyEmailRequest;
+import com.vynk.coparent_backend.user.dto.UserResponse;
+import com.vynk.coparent_backend.user.mapper.UserMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuthMapper authMapper;
+    private final UserMapper userMapper;
 
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
@@ -54,9 +57,8 @@ public class AuthController {
     }
 
     @PostMapping("/email/verify")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void verifyEmail(@Valid @RequestBody TokenRequest request) {
-        authService.verifyEmail(request.token());
+    public UserResponse verifyEmail(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody VerifyEmailRequest request) {
+        return userMapper.toResponse(authService.verifyEmail(UUID.fromString(jwt.getSubject()), request.code()));
     }
 
     @PostMapping("/email/resend")

@@ -10,13 +10,17 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.UUID;
 
 /** Creates access tokens (JWT) and opaque random tokens, and hashes opaque tokens for storage. */
 @Service
@@ -24,6 +28,7 @@ import java.util.HexFormat;
 public class TokenService {
 
     private static final int OPAQUE_TOKEN_BYTES = 32;
+    private static final int VERIFICATION_CODE_DIGITS = 8;
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final JwtEncoder jwtEncoder;
@@ -49,6 +54,28 @@ public class TokenService {
         byte[] bytes = new byte[OPAQUE_TOKEN_BYTES];
         RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /** 8 random digits, zero-padded (typed by the user, so digits only). */
+    public String generateVerificationCode() {
+        int bound = (int) Math.pow(10, VERIFICATION_CODE_DIGITS);
+        return String.format("%0" + VERIFICATION_CODE_DIGITS + "d", RANDOM.nextInt(bound));
+    }
+
+    /**
+     * HMAC-SHA256 hex of {@code userId:code}, keyed with the JWT secret. A short code needs a keyed hash: a plain
+     * SHA-256 could be reversed by trying every code if the database leaked. The user id keeps hashes unique
+     * across users (two users can receive the same code).
+     */
+    public String hashVerificationCode(UUID userId, String code) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(properties.jwtSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal((userId + ":" + code).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HmacSHA256 not available", e);
+        }
     }
 
     /** SHA-256 hex. Enough for high-entropy random tokens (unlike passwords, they need no slow hash). */

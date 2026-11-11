@@ -21,7 +21,7 @@ import java.time.Duration;
 /**
  * Sends account emails through the SMTP server in {@code spring.mail.*} (Mailpit in development, an EU
  * provider in production). Sending is asynchronous and a failure never fails the request: the user can ask
- * for the link again. Failures are logged with the user id only.
+ * for the code or link again. Failures are logged with the user id only.
  */
 @Slf4j
 @Component
@@ -35,13 +35,25 @@ public class SmtpEmailSender implements EmailSender {
 
     @Async
     @Override
-    public void sendEmailVerification(User user, String link) {
-        send(user, "Confirmez votre adresse email",
-                "Bonjour " + user.getFirstName() + ",",
-                "Pour confirmer votre adresse email, ouvrez le lien ci-dessous :",
-                link,
-                "Ce lien est valable " + describe(authProperties.emailVerificationTtl())
-                        + ". Si vous n'avez pas créé de compte Coparent, ignorez cet email.");
+    public void sendEmailVerification(User user, String code) {
+        String greeting = "Bonjour " + user.getFirstName() + ",";
+        String intro = "Pour confirmer votre adresse email, saisissez ce code dans l'application Coparent :";
+        String footer = "Ce code est valable " + describe(authProperties.emailVerificationTtl())
+                + ". Ne le communiquez à personne. Si vous n'avez pas créé de compte Coparent, ignorez cet email.";
+        String shown = displayCode(code);
+        String text = greeting + "\n\n" + intro + "\n\n" + shown + "\n\n" + footer + "\n\nL'équipe Coparent\n";
+        String html = """
+                <!doctype html>
+                <html lang="fr"><body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; color: #1f2937; line-height: 1.5;">
+                <p>%s</p>
+                <p>%s</p>
+                <p style="font-size: 32px; font-weight: 700; letter-spacing: 6px; margin: 24px 0;">%s</p>
+                <p style="font-size: 13px; color: #6b7280;">%s</p>
+                <p>L'équipe Coparent</p>
+                </body></html>
+                """.formatted(HtmlUtils.htmlEscape(greeting), HtmlUtils.htmlEscape(intro), HtmlUtils.htmlEscape(shown),
+                HtmlUtils.htmlEscape(footer));
+        deliver(user, "Votre code de vérification Coparent", text, html);
     }
 
     @Async
@@ -56,13 +68,17 @@ public class SmtpEmailSender implements EmailSender {
     }
 
     private void send(User user, String subject, String greeting, String intro, String link, String footer) {
+        deliver(user, subject, plainText(greeting, intro, link, footer), html(greeting, intro, link, footer));
+    }
+
+    private void deliver(User user, String subject, String text, String html) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
             helper.setFrom(mailProperties.from());
             helper.setTo(user.getEmail());
             helper.setSubject(subject);
-            helper.setText(plainText(greeting, intro, link, footer), html(greeting, intro, link, footer));
+            helper.setText(text, html);
             mailSender.send(message);
         } catch (MailException | MessagingException e) {
             log.error("[email] Could not send \"{}\" to user {}: {}", subject, user.getId(), e.getMessage());
@@ -87,6 +103,12 @@ public class SmtpEmailSender implements EmailSender {
                 </body></html>
                 """.formatted(HtmlUtils.htmlEscape(greeting), HtmlUtils.htmlEscape(intro), safeLink, safeLink,
                 HtmlUtils.htmlEscape(footer));
+    }
+
+    /** "48291375" → "4829 1375", easier to read and copy. */
+    static String displayCode(String code) {
+        int middle = code.length() / 2;
+        return code.substring(0, middle) + " " + code.substring(middle);
     }
 
     /** "24 heures", "30 minutes". */

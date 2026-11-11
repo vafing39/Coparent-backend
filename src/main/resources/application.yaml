@@ -22,7 +22,7 @@ app:
     jwt-secret: ${JWT_SECRET:}  # >= 32 bytes; local value lives in config/application.yaml (git-ignored)
     access-token-ttl: 15m
     refresh-token-ttl: 30d
-    email-verification-ttl: 24h
+    email-verification-ttl: 15m  # 8-digit code typed in the app
     password-reset-ttl: 30m
     check-compromised-passwords: true
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}

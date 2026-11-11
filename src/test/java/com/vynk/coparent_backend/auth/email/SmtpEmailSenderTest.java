@@ -30,7 +30,7 @@ class SmtpEmailSenderTest {
             mailSender,
             new MailProperties(MailProperties.Mode.SMTP, "Coparent <no-reply@coparent.local>"),
             new AuthProperties("unused", Duration.ofMinutes(15), Duration.ofDays(30),
-                    Duration.ofHours(24), Duration.ofMinutes(30), false, "http://localhost:8080"));
+                    Duration.ofMinutes(15), Duration.ofMinutes(30), false, "http://localhost:8080"));
     private final User user = new User("julie@example.com", "hash", "Julie");
 
     SmtpEmailSenderTest() {
@@ -38,13 +38,13 @@ class SmtpEmailSenderTest {
     }
 
     @Test
-    void verificationEmailGoesToTheUserWithTheLink() throws Exception {
-        sender.sendEmailVerification(user, "http://localhost:8080/verify-email?token=abc");
+    void verificationEmailGoesToTheUserWithTheCode() throws Exception {
+        sender.sendEmailVerification(user, "48291375");
 
         MimeMessage message = sentMessage();
         assertThat(message.getAllRecipients()[0].toString()).isEqualTo("julie@example.com");
-        assertThat(message.getSubject()).isEqualTo("Confirmez votre adresse email");
-        assertThat(raw(message)).contains("verify-email?token=abc").contains("24 heures");
+        assertThat(message.getSubject()).isEqualTo("Votre code de vérification Coparent");
+        assertThat(raw(message)).contains("4829 1375").contains("15 minutes").doesNotContain("http");
     }
 
     @Test
@@ -60,7 +60,7 @@ class SmtpEmailSenderTest {
     void smtpFailureDoesNotPropagate() {
         doThrow(new MailSendException("connection refused")).when(mailSender).send(any(MimeMessage.class));
 
-        assertThatCode(() -> sender.sendEmailVerification(user, "http://link")).doesNotThrowAnyException();
+        assertThatCode(() -> sender.sendEmailVerification(user, "48291375")).doesNotThrowAnyException();
     }
 
     private MimeMessage sentMessage() {

@@ -35,6 +35,7 @@ public class AuthService {
     private static final String INVALID_CREDENTIALS = "Email ou mot de passe incorrect.";
     private static final String INVALID_SESSION = "Session expirée. Veuillez vous reconnecter.";
     private static final String INVALID_LINK = "Ce lien n'est plus valide.";
+    private static final String INVALID_CODE = "Code incorrect ou expiré.";
 
     private final UserRepository userRepository;
     private final UserService userService;
@@ -116,14 +117,23 @@ public class AuthService {
                 .ifPresent(token -> token.revoke(clock.instant()));
     }
 
+    /** Checks the 8-digit code sent by email. Attempts are limited per user, since a code can be guessed. */
     @Transactional
-    public void verifyEmail(String rawToken) {
-        OneTimeToken token = consumeOneTimeToken(rawToken, OneTimeTokenType.EMAIL_VERIFICATION);
-        User user = token.getUser();
+    public User verifyEmail(UUID userId, String code) {
+        rateLimiter.consume(Action.EMAIL_VERIFY, userId.toString());
+        User user = userService.getActiveUser(userId);
+        Instant now = clock.instant();
+        OneTimeToken token = oneTimeTokenRepository
+                .findByTokenHashAndType(tokenService.hashVerificationCode(userId, code), OneTimeTokenType.EMAIL_VERIFICATION)
+                .filter(t -> t.getUser().getId().equals(userId) && t.isUsable(now))
+                .orElseThrow(() -> ApiException.badRequest(INVALID_CODE));
+        token.markUsed(now);
 
         if (!user.isEmailVerified()) {
-            user.setEmailVerifiedAt(clock.instant());
+            user.setEmailVerifiedAt(now);
         }
+
+        return user;
     }
 
     @Transactional
@@ -179,8 +189,12 @@ public class AuthService {
     }
 
     private void sendEmailVerification(User user) {
-        String rawToken = createOneTimeToken(user, OneTimeTokenType.EMAIL_VERIFICATION, properties.emailVerificationTtl());
-        emailSender.sendEmailVerification(user, link("/verify-email", rawToken));
+        Instant now = clock.instant();
+        oneTimeTokenRepository.invalidateUnused(user.getId(), OneTimeTokenType.EMAIL_VERIFICATION, now);
+        String code = tokenService.generateVerificationCode();
+        oneTimeTokenRepository.save(new OneTimeToken(user, OneTimeTokenType.EMAIL_VERIFICATION,
+                tokenService.hashVerificationCode(user.getId(), code), now.plus(properties.emailVerificationTtl())));
+        emailSender.sendEmailVerification(user, code);
     }
 
     private String createOneTimeToken(User user, OneTimeTokenType type, Duration ttl) {

@@ -22,7 +22,8 @@ public class RateLimiter {
         LOGIN(10, Duration.ofMinutes(15)),
         SIGNUP(10, Duration.ofHours(1)),
         PASSWORD_FORGOT(5, Duration.ofHours(1)),
-        EMAIL_RESEND(5, Duration.ofHours(1));
+        EMAIL_RESEND(5, Duration.ofHours(1)),
+        EMAIL_VERIFY(5, Duration.ofMinutes(15));
 
         private final int limit;
         private final Duration window;

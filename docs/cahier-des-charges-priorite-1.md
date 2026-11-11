@@ -13,7 +13,7 @@
 - Inscription par email et mot de passe : 12 caractères minimum, hachage Argon2id ou bcrypt, refus des mots de passe connus comme compromis.
 - Connexion Apple et Google : le jeton d'identité est vérifié côté serveur. Si l'email existe déjà, les comptes sont rattachés ; sinon un compte est créé.
 - Jetons de session : access token de courte durée (15 min) et refresh token à rotation, révocable. Déconnexion = révocation du refresh token.
-- Vérification de l'email : lien à usage unique, valable 24 h, avec renvoi limité. Les comptes Apple et Google sont considérés comme vérifiés.
+- Vérification de l'email : code à 8 chiffres saisi dans l'app, à usage unique, valable 15 minutes, 5 essais au plus, avec renvoi limité. Les comptes Apple et Google sont considérés comme vérifiés.
 - Mot de passe oublié : lien à usage unique valable 30 minutes. La réponse est identique que le compte existe ou non. Un changement de mot de passe révoque toutes les sessions.
 - Limitation de débit sur la connexion, l'inscription, le mot de passe oublié et les renvois d'email.
 - Export des données personnelles (RGPD) : archive générée de façon asynchrone, lien temporaire.
