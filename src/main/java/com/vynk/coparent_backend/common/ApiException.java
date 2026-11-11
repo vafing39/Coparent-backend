@@ -1,0 +1,35 @@
+package com.vynk.coparent_backend.common;
+
+import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+/**
+ * Business error translated into an RFC 9457 problem response by {@link GlobalExceptionHandler}.
+ * The detail message is shown to API clients, so it must stay neutral and never leak personal data.
+ */
+@Getter
+public class ApiException extends RuntimeException {
+
+    private final HttpStatus status;
+
+    public ApiException(HttpStatus status, String detail) {
+        super(detail);
+        this.status = status;
+    }
+
+    public static ApiException badRequest(String detail) {
+        return new ApiException(HttpStatus.BAD_REQUEST, detail);
+    }
+
+    public static ApiException unauthorized(String detail) {
+        return new ApiException(HttpStatus.UNAUTHORIZED, detail);
+    }
+
+    public static ApiException conflict(String detail) {
+        return new ApiException(HttpStatus.CONFLICT, detail);
+    }
+
+    public static ApiException tooManyRequests() {
+        return new ApiException(HttpStatus.TOO_MANY_REQUESTS, "Trop de tentatives. Réessayez plus tard.");
+    }
+}

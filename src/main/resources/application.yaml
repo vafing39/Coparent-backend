@@ -5,3 +5,19 @@ spring:
     url: jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true
     username: root
     password: 40416804
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate  # Flyway owns the schema; Hibernate only checks entities match it
+    properties:
+      hibernate.jdbc.time_zone: UTC
+
+app:
+  auth:
+    jwt-secret: ${JWT_SECRET:}  # >= 32 bytes; local value lives in config/application.yaml (git-ignored)
+    access-token-ttl: 15m
+    refresh-token-ttl: 30d
+    email-verification-ttl: 24h
+    password-reset-ttl: 30m
+    check-compromised-passwords: true
+    public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}

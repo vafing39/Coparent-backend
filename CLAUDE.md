@@ -1,0 +1,65 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+Coparent backend: the API for a co-parenting app (custody calendar, events, custody exchange requests, immutable messaging, push notifications). Spring Boot 4.1 on Java 25, MySQL, Flyway, Spring Security (JWT resource server), JPA, MapStruct, Lombok. Base package `com.vynk.coparent_backend`. The functional spec is `docs/cahier-des-charges-priorite-1.md` (French) and is the reference for every feature.
+
+## Commands
+
+Run from this directory, always through the wrapper:
+
+```bash
+./mvnw clean verify                      # build + all tests
+./mvnw test -Dtest=CoparentBackendApplicationTests            # one test class
+./mvnw test -Dtest=CoparentBackendApplicationTests#contextLoads  # one test method
+./mvnw spring-boot:run                   # run the app
+```
+
+There is no linter or formatter configured.
+
+## Environment gotchas
+
+- **JDK**: `pom.xml` targets Java 25, so the build needs JDK 25+ (JDK 26 is installed at `/Library/Java/JavaVirtualMachines/jdk-26.jdk`). A shell still on JDK 17 fails to compile.
+- **Maven version is pinned to 3.9.x** in `.mvn/wrapper/maven-wrapper.properties` on purpose: IntelliJ's Maven importer crashes with Maven 3.10.0 (`Guice/MissingImplementation: No implementation for ArtifactHandlerManager`). Do not bump it to 3.10.
+- **Database**: tests use `@SpringBootTest` and start the full context, so Flyway connects to a real local MySQL. Without MySQL running, every test fails.
+- **JWT secret**: `app.auth.jwt-secret` (env `JWT_SECRET`, at least 32 bytes) is required at startup; the local value is in `config/application.yaml`. Tests set their own secret and disable the Have I Been Pwned check via `@SpringBootTest(properties = ...)`.
+- **Credentials**: `src/main/resources/application.yaml` reads `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (default URL `jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true`). Local values live in `config/application.yaml`, which Spring Boot loads automatically from the working directory and which is git-ignored. Never move credentials into `src/`.
+
+## Architecture
+
+Packages are organized by feature (`user/`, `auth/`), and each feature is split into layer sub-packages: `controller/`, `service/`, `repository/`, `entity/`, `mapper/`, `dto/`. New features follow the same shape.
+
+- `user/`: `User` (+ `UserIdentity` for future Apple/Google sign-in), `UserService`, `GET /api/v1/users/me`.
+- `auth/`: `/api/v1/auth/**` (signup, login, refresh, logout, email verify/resend, password forgot/reset). `service/` holds `AuthService` (the rules), `TokenService` (JWTs and opaque tokens), `PasswordPolicy` and `RateLimiter` (in-memory, single instance only); `email/` holds `EmailSender` (currently `LoggingEmailSender`, which prints links to the log).
+- `config/`: `SecurityConfig` (stateless, `/api/v1/auth/**` public except `email/resend`), typed `AuthProperties` (`app.auth.*`), UTC `Clock` bean.
+- `common/`: `ApiException` + `GlobalExceptionHandler`, so every error is an RFC 9457 `ProblemDetail` with a neutral French message.
+
+Auth model:
+- Access token = HS256 JWT (15 min), `sub` = user UUID; controllers read it with `@AuthenticationPrincipal Jwt`.
+- Refresh tokens rotate on every use and share a `familyId` per session; replaying a rotated token revokes the whole family. Password reset revokes all of the user's refresh tokens.
+- Refresh and one-time tokens are 32 random bytes; only their SHA-256 hex is stored.
+- Error responses must not reveal whether an account exists (login and forgot-password answer identically).
+
+Conventions:
+- Entities: UUID ids via `@UuidGenerator(style = TIME)` mapped to `BINARY(16)`, `Instant` dates, `@Enumerated(STRING)` for MySQL `ENUM` columns, Lombok `@Getter` plus a protected no-arg constructor (no `@Data`).
+- `spring.jpa.hibernate.ddl-auto=validate`: entities must match the Flyway schema exactly, or startup fails.
+- Mappers are MapStruct interfaces with the Spring component model set globally (`-Amapstruct.defaultComponentModel=spring` in `pom.xml`), so no `componentModel` attribute is needed.
+- Integration tests (`auth/AuthFlowIntegrationTest`) hit the local MySQL: they create users on the `@test.coparent.invalid` domain, delete only those afterwards, mock `EmailSender` to capture links, and call `RateLimiter.reset()` before each test.
+
+## Database migrations
+
+Flyway migrations go in `src/main/resources/db/migration/` as `V<n>__<description>.sql` (MySQL dialect, via `flyway-mysql`). The user writes and imports migrations themselves; don't add or edit migration files unless asked. Never modify a migration that has already been applied; add a new version instead.
+
+## Design rules from the spec
+
+These cut across every feature, so keep them in mind when adding code:
+
+- The backend is the single source of truth: it enforces access rights (by family and role, on every endpoint), custody computation, event visibility (private events never reach the other parent through any channel: API, WebSocket, exports) and message immutability. The app only displays and sends.
+- Dates are stored in UTC and computed/returned for `Europe/Paris` (custody handovers, reminders, DST changes).
+  - In migrations, date columns are `DATETIME(6)` with `DEFAULT (UTC_TIMESTAMP(6))`; never `TIMESTAMP` (ends in 2038, time-zone dependent) or `NOW()` (session local time).
+  - In entities, map them to `java.time.Instant`, never `LocalDateTime`/`Date`. `hibernate.jdbc.time_zone: UTC` is set in `application.yaml`.
+- Messages are immutable: no update/delete endpoints, protection at the database level, server timestamps, and a hash chained with the previous message.
+- REST API documented with OpenAPI 3 (the app generates its types from it); real-time over authenticated WebSocket.
+- No personal data in application logs or Sentry; push notification texts never include sensitive content.
