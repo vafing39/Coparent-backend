@@ -2,14 +2,16 @@ package com.vynk.coparent_backend.auth.email;
 
 import com.vynk.coparent_backend.user.entity.User;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Development stand-in until a real email provider is wired: writes the link to the log.
- * Logs only the user id, never the email address (no personal data in logs).
+ * Sends nothing: writes the link to the log. Active with {@code app.mail.mode=log}, for running without an
+ * SMTP server. Logs only the user id, never the email address (no personal data in logs).
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "app.mail.mode", havingValue = "log")
 public class LoggingEmailSender implements EmailSender {
 
     @Override

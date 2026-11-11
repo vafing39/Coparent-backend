@@ -56,15 +56,19 @@ public class AuthService {
         rateLimiter.consume(Action.SIGNUP, clientIp);
         String email = normalizeEmail(request.email());
         passwordPolicy.validate(request.password(), request.confirmPassword());
+
         if (userRepository.existsByEmail(email)) {
             throw ApiException.conflict("Un compte existe déjà avec cet email.");
         }
+
         User user = new User(email, passwordEncoder.encode(request.password()), request.firstName().trim());
+
         try {
             userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) { // concurrent signup with the same email
             throw ApiException.conflict("Un compte existe déjà avec cet email.");
         }
+
         sendEmailVerification(user);
         return startSession(user, UUID.randomUUID());
     }
@@ -76,9 +80,11 @@ public class AuthService {
         Optional<User> user = userRepository.findByEmail(email);
         String hash = user.map(User::getPasswordHash).orElse(null);
         boolean passwordMatches = passwordEncoder.matches(request.password(), hash != null ? hash : dummyHash());
+
         if (user.isEmpty() || hash == null || !passwordMatches || !user.get().isActive()) {
             throw ApiException.unauthorized(INVALID_CREDENTIALS);
         }
+
         return startSession(user.get(), UUID.randomUUID());
     }
 
@@ -88,15 +94,19 @@ public class AuthService {
         Instant now = clock.instant();
         RefreshToken current = refreshTokenRepository.findByTokenHash(tokenService.hash(rawRefreshToken))
                 .orElseThrow(() -> ApiException.unauthorized(INVALID_SESSION));
+
         if (current.wasRotated()) {
             refreshTokenRepository.revokeFamily(current.getFamilyId(), now);
             throw ApiException.unauthorized(INVALID_SESSION);
         }
+
         if (!current.isUsable(now) || !current.getUser().isActive()) {
             throw ApiException.unauthorized(INVALID_SESSION);
         }
+
         IssuedSession issued = issueSession(current.getUser(), current.getFamilyId());
         current.rotateTo(issued.refreshToken(), now);
+
         return issued.session();
     }
 
@@ -110,6 +120,7 @@ public class AuthService {
     public void verifyEmail(String rawToken) {
         OneTimeToken token = consumeOneTimeToken(rawToken, OneTimeTokenType.EMAIL_VERIFICATION);
         User user = token.getUser();
+
         if (!user.isEmailVerified()) {
             user.setEmailVerifiedAt(clock.instant());
         }
@@ -119,6 +130,7 @@ public class AuthService {
     public void resendEmailVerification(UUID userId) {
         rateLimiter.consume(Action.EMAIL_RESEND, userId.toString());
         User user = userService.getActiveUser(userId);
+
         if (!user.isEmailVerified()) {
             sendEmailVerification(user);
         }
@@ -130,6 +142,7 @@ public class AuthService {
         String email = normalizeEmail(rawEmail);
         rateLimiter.consume(Action.PASSWORD_FORGOT, clientIp);
         rateLimiter.consume(Action.PASSWORD_FORGOT, email);
+
         userRepository.findByEmail(email).filter(User::isActive).ifPresent(user -> {
             String rawToken = createOneTimeToken(user, OneTimeTokenType.PASSWORD_RESET, properties.passwordResetTtl());
             emailSender.sendPasswordReset(user, link("/reset-password", rawToken));
@@ -161,6 +174,7 @@ public class AuthService {
                 new RefreshToken(user, familyId, tokenService.hash(rawRefreshToken), refreshExpiresAt));
         AuthSession session = new AuthSession(
                 tokenService.issueAccessToken(user, now), rawRefreshToken, refreshExpiresAt, user);
+
         return new IssuedSession(session, refreshToken);
     }
 
@@ -174,6 +188,7 @@ public class AuthService {
         oneTimeTokenRepository.invalidateUnused(user.getId(), type, now);
         String rawToken = tokenService.generateOpaqueToken();
         oneTimeTokenRepository.save(new OneTimeToken(user, type, tokenService.hash(rawToken), now.plus(ttl)));
+
         return rawToken;
     }
 
@@ -183,6 +198,7 @@ public class AuthService {
                 .filter(t -> t.isUsable(now) && t.getUser().isActive())
                 .orElseThrow(() -> ApiException.badRequest(INVALID_LINK));
         token.markUsed(now);
+
         return token;
     }
 
@@ -194,6 +210,7 @@ public class AuthService {
         if (dummyPasswordHash == null) {
             dummyPasswordHash = passwordEncoder.encode(UUID.randomUUID().toString());
         }
+
         return dummyPasswordHash;
     }
 

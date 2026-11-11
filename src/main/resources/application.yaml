@@ -5,6 +5,11 @@ spring:
     url: jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true
     username: root
     password: 40416804
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}  # Mailpit default (local dev inbox at http://localhost:8025)
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
   jpa:
     open-in-view: false
     hibernate:
@@ -21,3 +26,6 @@ app:
     password-reset-ttl: 30m
     check-compromised-passwords: true
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+  mail:
+    mode: ${MAIL_MODE:smtp}  # smtp = send through spring.mail.*; log = only write links to the app log
+    from: ${MAIL_FROM:Coparent <no-reply@coparent.local>}

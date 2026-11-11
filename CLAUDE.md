@@ -25,6 +25,7 @@ There is no linter or formatter configured.
 - **Maven version is pinned to 3.9.x** in `.mvn/wrapper/maven-wrapper.properties` on purpose: IntelliJ's Maven importer crashes with Maven 3.10.0 (`Guice/MissingImplementation: No implementation for ArtifactHandlerManager`). Do not bump it to 3.10.
 - **Database**: tests use `@SpringBootTest` and start the full context, so Flyway connects to a real local MySQL. Without MySQL running, every test fails.
 - **JWT secret**: `app.auth.jwt-secret` (env `JWT_SECRET`, at least 32 bytes) is required at startup; the local value is in `config/application.yaml`. Tests set their own secret and disable the Have I Been Pwned check via `@SpringBootTest(properties = ...)`.
+- **Email**: by default (`app.mail.mode=smtp`) emails go to the SMTP server in `spring.mail.*`, which defaults to Mailpit on `localhost:1025`. Run `mailpit` (installed with `brew install mailpit`) and read the emails at http://localhost:8025. With `MAIL_MODE=log` nothing is sent and links are written to the app log instead. In production set `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM`, plus `spring.mail.properties.mail.smtp.auth=true` and `spring.mail.properties.mail.smtp.starttls.enable=true`.
 - **Credentials**: `src/main/resources/application.yaml` reads `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` (default URL `jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true`). Local values live in `config/application.yaml`, which Spring Boot loads automatically from the working directory and which is git-ignored. Never move credentials into `src/`.
 
 ## Architecture
@@ -32,7 +33,7 @@ There is no linter or formatter configured.
 Packages are organized by feature (`user/`, `auth/`), and each feature is split into layer sub-packages: `controller/`, `service/`, `repository/`, `entity/`, `mapper/`, `dto/`. New features follow the same shape.
 
 - `user/`: `User` (+ `UserIdentity` for future Apple/Google sign-in), `UserService`, `GET /api/v1/users/me`.
-- `auth/`: `/api/v1/auth/**` (signup, login, refresh, logout, email verify/resend, password forgot/reset). `service/` holds `AuthService` (the rules), `TokenService` (JWTs and opaque tokens), `PasswordPolicy` and `RateLimiter` (in-memory, single instance only); `email/` holds `EmailSender` (currently `LoggingEmailSender`, which prints links to the log).
+- `auth/`: `/api/v1/auth/**` (signup, login, refresh, logout, email verify/resend, password forgot/reset). `service/` holds `AuthService` (the rules), `TokenService` (JWTs and opaque tokens), `PasswordPolicy` and `RateLimiter` (in-memory, single instance only); `email/` holds `EmailSender`, implemented by `SmtpEmailSender` (`@Async`; an SMTP failure is logged and never fails the request) or `LoggingEmailSender`, selected by `app.mail.mode`.
 - `config/`: `SecurityConfig` (stateless, `/api/v1/auth/**` public except `email/resend`), typed `AuthProperties` (`app.auth.*`), UTC `Clock` bean.
 - `common/`: `ApiException` + `GlobalExceptionHandler`, so every error is an RFC 9457 `ProblemDetail` with a neutral French message.
 
