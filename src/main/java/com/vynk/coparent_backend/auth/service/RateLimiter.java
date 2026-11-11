@@ -23,7 +23,11 @@ public class RateLimiter {
         SIGNUP(10, Duration.ofHours(1)),
         PASSWORD_FORGOT(5, Duration.ofHours(1)),
         EMAIL_RESEND(5, Duration.ofHours(1)),
-        EMAIL_VERIFY(5, Duration.ofMinutes(15));
+        EMAIL_VERIFY(5, Duration.ofMinutes(15)),
+        /** Password-reset attempts (code typed in the app), per email and per IP. */
+        PASSWORD_RESET(5, Duration.ofMinutes(15)),
+        /** Wrong reset codes per account: once reached, the code is cancelled (window = code lifetime). */
+        PASSWORD_RESET_FAILURE(5, Duration.ofMinutes(30));
 
         private final int limit;
         private final Duration window;
@@ -44,6 +48,17 @@ public class RateLimiter {
 
     /** Counts one attempt for {@code key}; throws 429 once the limit for the current window is exceeded. */
     public void consume(Action action, String key) {
+        if (count(action, key) > action.limit) {
+            throw ApiException.tooManyRequests();
+        }
+    }
+
+    /** Counts one event for {@code key} and tells whether the limit of the current window is now reached. */
+    public boolean reachesLimit(Action action, String key) {
+        return count(action, key) >= action.limit;
+    }
+
+    private int count(Action action, String key) {
         Instant now = clock.instant();
         if (windows.size() > CLEANUP_THRESHOLD) {
             windows.values().removeIf(w -> now.isAfter(w.start().plus(Duration.ofHours(1))));
@@ -52,9 +67,7 @@ public class RateLimiter {
                 current == null || !now.isBefore(current.start().plus(action.window))
                         ? new Window(now, 1)
                         : new Window(current.start(), current.count() + 1));
-        if (window.count() > action.limit) {
-            throw ApiException.tooManyRequests();
-        }
+        return window.count();
     }
 
     /** Test helper. */

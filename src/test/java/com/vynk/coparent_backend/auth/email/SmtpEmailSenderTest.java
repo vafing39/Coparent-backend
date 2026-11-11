@@ -48,12 +48,12 @@ class SmtpEmailSenderTest {
     }
 
     @Test
-    void resetEmailMentionsThirtyMinutes() throws Exception {
-        sender.sendPasswordReset(user, "http://localhost:8080/reset-password?token=xyz");
+    void resetEmailHasTheCodeAndMentionsThirtyMinutes() throws Exception {
+        sender.sendPasswordReset(user, "12345678");
 
         MimeMessage message = sentMessage();
         assertThat(message.getSubject()).isEqualTo("Réinitialisation de votre mot de passe");
-        assertThat(raw(message)).contains("reset-password?token=xyz").contains("30 minutes");
+        assertThat(raw(message)).contains("1234 5678").contains("30 minutes").doesNotContain("http");
     }
 
     @Test

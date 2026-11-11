@@ -198,18 +198,50 @@ class AuthFlowIntegrationTest {
         String oldRefresh = JsonPath.read(session, "$.refreshToken");
 
         forgot(email).andExpect(status().isAccepted());
-        ArgumentCaptor<String> link = ArgumentCaptor.forClass(String.class);
-        verify(emailSender).sendPasswordReset(any(User.class), link.capture());
+        String code = sentResetCode();
         String newPassword = "another-long-password";
 
-        String resetToken = tokenFromLink(link.getValue());
-
-        resetPassword(resetToken, newPassword, "different-long-password").andExpect(status().isBadRequest());
-        resetPassword(resetToken, newPassword, newPassword).andExpect(status().isNoContent());
+        resetPassword(email, code, newPassword, "different-long-password").andExpect(status().isBadRequest());
+        resetPassword(email, code, newPassword, newPassword).andExpect(status().isNoContent());
+        resetPassword(email, code, "a-third-long-password", "a-third-long-password")
+                .andExpect(status().isBadRequest()); // single use
 
         refresh(oldRefresh).andExpect(status().isUnauthorized());
         login(email, PASSWORD).andExpect(status().isUnauthorized());
         login(email, newPassword).andExpect(status().isOk());
+    }
+
+    @Test
+    void resetPasswordAnswersTheSameForAWrongCodeAndAnUnknownEmail() throws Exception {
+        String email = randomEmail();
+        signup(email, PASSWORD).andExpect(status().isCreated());
+        forgot(email).andExpect(status().isAccepted());
+        String code = sentResetCode();
+
+        String wrongCode = resetPassword(email, wrongCode(code), "another-long-password", "another-long-password")
+                .andExpect(status().isBadRequest()).andReturn().getResponse().getContentAsString();
+        String unknownEmail = resetPassword(randomEmail(), code, "another-long-password", "another-long-password")
+                .andExpect(status().isBadRequest()).andReturn().getResponse().getContentAsString();
+        assertThat((String) JsonPath.read(unknownEmail, "$.detail")).isEqualTo(JsonPath.read(wrongCode, "$.detail"));
+    }
+
+    @Test
+    void resetCodeIsCancelledAfterFiveWrongCodes() throws Exception {
+        String email = randomEmail();
+        signup(email, PASSWORD).andExpect(status().isCreated());
+        forgot(email).andExpect(status().isAccepted());
+        String code = sentResetCode();
+
+        for (int i = 0; i < 5; i++) {
+            resetPassword(email, wrongCode(code), "another-long-password", "another-long-password")
+                    .andExpect(status().isBadRequest());
+        }
+        resetPassword(email, code, "another-long-password", "another-long-password")
+                .andExpect(status().isTooManyRequests()); // attempts limit
+        rateLimiter.reset();
+        resetPassword(email, code, "another-long-password", "another-long-password")
+                .andExpect(status().isBadRequest()); // the code itself was cancelled
+        login(email, PASSWORD).andExpect(status().isOk());
     }
 
     @Test
@@ -243,10 +275,17 @@ class AuthFlowIntegrationTest {
                 .content("{\"refreshToken\":\"" + refreshToken + "\"}"));
     }
 
-    private ResultActions resetPassword(String token, String newPassword, String confirmation) throws Exception {
+    private ResultActions resetPassword(String email, String code, String newPassword, String confirmation)
+            throws Exception {
         return mvc.perform(post("/api/v1/auth/password/reset").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"token\":\"" + token + "\",\"newPassword\":\"" + newPassword
-                        + "\",\"confirmPassword\":\"" + confirmation + "\"}"));
+                .content("{\"email\":\"" + email + "\",\"code\":\"" + code + "\",\"newPassword\":\""
+                        + newPassword + "\",\"confirmPassword\":\"" + confirmation + "\"}"));
+    }
+
+    private String sentResetCode() {
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(emailSender).sendPasswordReset(any(User.class), code.capture());
+        return code.getValue();
     }
 
     private ResultActions forgot(String email) throws Exception {
@@ -269,10 +308,6 @@ class AuthFlowIntegrationTest {
     /** A different 8-digit code. */
     private static String wrongCode(String code) {
         return String.format("%08d", (Integer.parseInt(code) + 1) % 100_000_000);
-    }
-
-    private static String tokenFromLink(String link) {
-        return link.substring(link.indexOf("token=") + "token=".length());
     }
 
     private static String bearer(String authResponseJson) {

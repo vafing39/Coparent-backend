@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Optional;
@@ -34,7 +33,6 @@ public class AuthService {
 
     private static final String INVALID_CREDENTIALS = "Email ou mot de passe incorrect.";
     private static final String INVALID_SESSION = "Session expirée. Veuillez vous reconnecter.";
-    private static final String INVALID_LINK = "Ce lien n'est plus valide.";
     private static final String INVALID_CODE = "Code incorrect ou expiré.";
 
     private final UserRepository userRepository;
@@ -146,7 +144,10 @@ public class AuthService {
         }
     }
 
-    /** Same response whether or not the account exists (no account enumeration). */
+    /**
+     * Sends an 8-digit reset code by email (30 min, single use; a new request cancels the previous code).
+     * Same response whether or not the account exists (no account enumeration).
+     */
     @Transactional
     public void forgotPassword(String rawEmail, String clientIp) {
         String email = normalizeEmail(rawEmail);
@@ -154,19 +155,44 @@ public class AuthService {
         rateLimiter.consume(Action.PASSWORD_FORGOT, email);
 
         userRepository.findByEmail(email).filter(User::isActive).ifPresent(user -> {
-            String rawToken = createOneTimeToken(user, OneTimeTokenType.PASSWORD_RESET, properties.passwordResetTtl());
-            emailSender.sendPasswordReset(user, link("/reset-password", rawToken));
+            Instant now = clock.instant();
+            oneTimeTokenRepository.invalidateUnused(user.getId(), OneTimeTokenType.PASSWORD_RESET, now);
+            String code = tokenService.generateVerificationCode();
+            oneTimeTokenRepository.save(new OneTimeToken(user, OneTimeTokenType.PASSWORD_RESET,
+                    tokenService.hashPasswordResetCode(user.getId(), code), now.plus(properties.passwordResetTtl())));
+            emailSender.sendPasswordReset(user, code);
         });
     }
 
-    /** Sets the new password and signs out every session of the account. */
-    @Transactional
-    public void resetPassword(ResetPasswordRequest request) {
+    /**
+     * Checks the emailed code, sets the new password and signs out every session of the account. An unknown email
+     * and a wrong or expired code get the same answer. Attempts are limited per email and per IP, and the code is
+     * cancelled after {@code PASSWORD_RESET_FAILURE} wrong codes (that cancellation must survive the error, hence
+     * no rollback on {@link ApiException}).
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    public void resetPassword(ResetPasswordRequest request, String clientIp) {
+        String email = normalizeEmail(request.email());
+        rateLimiter.consume(Action.PASSWORD_RESET, clientIp);
+        rateLimiter.consume(Action.PASSWORD_RESET, email);
         passwordPolicy.validate(request.newPassword(), request.confirmPassword());
-        OneTimeToken token = consumeOneTimeToken(request.token(), OneTimeTokenType.PASSWORD_RESET);
-        User user = token.getUser();
+
+        Instant now = clock.instant();
+        User user = userRepository.findByEmail(email).filter(User::isActive)
+                .orElseThrow(() -> ApiException.badRequest(INVALID_CODE));
+        Optional<OneTimeToken> token = oneTimeTokenRepository
+                .findByTokenHashAndType(tokenService.hashPasswordResetCode(user.getId(), request.code()),
+                        OneTimeTokenType.PASSWORD_RESET)
+                .filter(t -> t.getUser().getId().equals(user.getId()) && t.isUsable(now));
+        if (token.isEmpty()) {
+            if (rateLimiter.reachesLimit(Action.PASSWORD_RESET_FAILURE, user.getId().toString())) {
+                oneTimeTokenRepository.invalidateUnused(user.getId(), OneTimeTokenType.PASSWORD_RESET, now);
+            }
+            throw ApiException.badRequest(INVALID_CODE);
+        }
+        token.get().markUsed(now);
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
-        refreshTokenRepository.revokeAllForUser(user.getId(), clock.instant());
+        refreshTokenRepository.revokeAllForUser(user.getId(), now);
     }
 
     private record IssuedSession(AuthSession session, RefreshToken refreshToken) {
@@ -195,29 +221,6 @@ public class AuthService {
         oneTimeTokenRepository.save(new OneTimeToken(user, OneTimeTokenType.EMAIL_VERIFICATION,
                 tokenService.hashVerificationCode(user.getId(), code), now.plus(properties.emailVerificationTtl())));
         emailSender.sendEmailVerification(user, code);
-    }
-
-    private String createOneTimeToken(User user, OneTimeTokenType type, Duration ttl) {
-        Instant now = clock.instant();
-        oneTimeTokenRepository.invalidateUnused(user.getId(), type, now);
-        String rawToken = tokenService.generateOpaqueToken();
-        oneTimeTokenRepository.save(new OneTimeToken(user, type, tokenService.hash(rawToken), now.plus(ttl)));
-
-        return rawToken;
-    }
-
-    private OneTimeToken consumeOneTimeToken(String rawToken, OneTimeTokenType type) {
-        Instant now = clock.instant();
-        OneTimeToken token = oneTimeTokenRepository.findByTokenHashAndType(tokenService.hash(rawToken), type)
-                .filter(t -> t.isUsable(now) && t.getUser().isActive())
-                .orElseThrow(() -> ApiException.badRequest(INVALID_LINK));
-        token.markUsed(now);
-
-        return token;
-    }
-
-    private String link(String path, String rawToken) {
-        return properties.publicBaseUrl() + path + "?token=" + rawToken;
     }
 
     private String dummyHash() {

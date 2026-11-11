@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * Sends nothing: writes the code or link to the log. Active with {@code app.mail.mode=log}, for running without an
+ * Sends nothing: writes the code to the log. Active with {@code app.mail.mode=log}, for running without an
  * SMTP server. Logs only the user id, never the email address (no personal data in logs).
  */
 @Slf4j
@@ -20,7 +20,7 @@ public class LoggingEmailSender implements EmailSender {
     }
 
     @Override
-    public void sendPasswordReset(User user, String link) {
-        log.info("[email] Password reset link for user {}: {}", user.getId(), link);
+    public void sendPasswordReset(User user, String code) {
+        log.info("[email] Password reset code for user {}: {}", user.getId(), code);
     }
 }

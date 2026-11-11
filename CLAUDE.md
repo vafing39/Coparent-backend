@@ -42,7 +42,8 @@ Packages are organized by feature (`user/`, `auth/`, `family/`), and each featur
 Auth model:
 - Access token = HS256 JWT (15 min), `sub` = user UUID; controllers read it with `@AuthenticationPrincipal Jwt`.
 - Refresh tokens rotate on every use and share a `familyId` per session; replaying a rotated token revokes the whole family. Password reset revokes all of the user's refresh tokens.
-- Refresh tokens and password-reset tokens are 32 random bytes; only their SHA-256 hex is stored.
+- Refresh tokens are 32 random bytes; only their SHA-256 hex is stored.
+- Password reset uses an 8-digit code sent by email (30 min, single use) instead of the link described in spec §1. `POST /api/v1/auth/password/forgot` always answers the same way; `POST /api/v1/auth/password/reset` takes `email`, `code`, `newPassword`, `confirmPassword` and applies the password policy before checking the code. An unknown email and a wrong code both get the same 400 « Code incorrect ou expiré. ». The code is stored in `one_time_tokens` as an HMAC-SHA256 of `password-reset:userId:code` (`TokenService.hashPasswordResetCode`); `RateLimiter.Action.PASSWORD_RESET` limits requests per IP and per email, and after 5 wrong codes (`PASSWORD_RESET_FAILURE`) the code is cancelled.
 - Email verification uses an 8-digit code typed in the app (15 min, single use), checked by the authenticated `POST /api/v1/auth/email/verify`. It is stored in `one_time_tokens` as an HMAC-SHA256 of `userId:code` keyed with the JWT secret (`TokenService.hashVerificationCode`), and attempts are limited by `RateLimiter.Action.EMAIL_VERIFY` (5 per 15 min per user).
 - Error responses must not reveal whether an account exists (login and forgot-password answer identically).
 
@@ -50,7 +51,7 @@ Conventions:
 - Entities: UUID ids via `@UuidGenerator(style = TIME)` mapped to `BINARY(16)`, `Instant` dates, `@Enumerated(STRING)` for MySQL `ENUM` columns, Lombok `@Getter` plus a protected no-arg constructor (no `@Data`).
 - `spring.jpa.hibernate.ddl-auto=validate`: entities must match the Flyway schema exactly, or startup fails.
 - Mappers are MapStruct interfaces with the Spring component model set globally (`-Amapstruct.defaultComponentModel=spring` in `pom.xml`), so no `componentModel` attribute is needed.
-- Integration tests (`auth/AuthFlowIntegrationTest`) hit the local MySQL: they create users on the `@test.coparent.invalid` domain, delete only those afterwards, mock `EmailSender` to capture links, and call `RateLimiter.reset()` before each test.
+- Integration tests (`auth/AuthFlowIntegrationTest`) hit the local MySQL: they create users on the `@test.coparent.invalid` domain, delete only those afterwards, mock `EmailSender` to capture codes, and call `RateLimiter.reset()` before each test.
 
 ## Database migrations
 

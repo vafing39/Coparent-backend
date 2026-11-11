@@ -56,7 +56,7 @@ public class TokenService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    /** 8 random digits, zero-padded (typed by the user, so digits only). */
+    /** 8 random digits, zero-padded (typed by the user, so digits only): email verification and password reset. */
     public String generateVerificationCode() {
         int bound = (int) Math.pow(10, VERIFICATION_CODE_DIGITS);
         return String.format("%0" + VERIFICATION_CODE_DIGITS + "d", RANDOM.nextInt(bound));
@@ -68,10 +68,22 @@ public class TokenService {
      * across users (two users can receive the same code).
      */
     public String hashVerificationCode(UUID userId, String code) {
+        return hmac(userId + ":" + code);
+    }
+
+    /**
+     * Same keyed hash for the password-reset code, with its own prefix: an email-verification code and a reset code
+     * that happen to be equal never share a hash (the column is unique).
+     */
+    public String hashPasswordResetCode(UUID userId, String code) {
+        return hmac("password-reset:" + userId + ":" + code);
+    }
+
+    private String hmac(String value) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(properties.jwtSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] digest = mac.doFinal((userId + ":" + code).getBytes(StandardCharsets.UTF_8));
+            byte[] digest = mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(digest);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("HmacSHA256 not available", e);

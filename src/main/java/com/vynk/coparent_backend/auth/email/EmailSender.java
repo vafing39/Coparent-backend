@@ -8,5 +8,6 @@ public interface EmailSender {
     /** {@code code}: the 8-digit verification code, typed by the user in the app. */
     void sendEmailVerification(User user, String code);
 
-    void sendPasswordReset(User user, String link);
+    /** {@code code}: the 8-digit password-reset code, typed by the user in the app. */
+    void sendPasswordReset(User user, String code);
 }

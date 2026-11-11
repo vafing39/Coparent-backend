@@ -75,7 +75,7 @@ public class AuthController {
 
     @PostMapping("/password/reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.resetPassword(request);
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request, HttpServletRequest http) {
+        authService.resetPassword(request, http.getRemoteAddr());
     }
 }

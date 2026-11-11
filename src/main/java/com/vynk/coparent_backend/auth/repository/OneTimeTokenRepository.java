@@ -17,7 +17,7 @@ public interface OneTimeTokenRepository extends JpaRepository<OneTimeToken, UUID
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<OneTimeToken> findByTokenHashAndType(String tokenHash, OneTimeTokenType type);
 
-    /** Invalidates earlier links when a new one is sent, so only the latest link works. */
+    /** Invalidates earlier codes when a new one is sent (or after too many wrong codes): only the latest works. */
     @Modifying
     @Query("update OneTimeToken t set t.usedAt = :now where t.user.id = :userId and t.type = :type and t.usedAt is null")
     int invalidateUnused(UUID userId, OneTimeTokenType type, Instant now);
