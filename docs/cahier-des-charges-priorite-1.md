@@ -50,6 +50,7 @@
 - Endpoint de calcul : pour une période, il renvoie jour par jour le parent de nuit et les bascules (date, heure, de qui vers qui). Le résultat est mis en cache et invalidé à chaque changement de règle ou d'exception.
 - Toute modification d'une règle de garde demande l'accord des deux parents, sauf en mode solo.
 - Historique de toutes les modifications (qui, quand, avant, après).
+- Sac à préparer : une liste durable d'éléments par enfant, partagée par les deux parents (ajout, suppression). Une case cochée vaut pour le prochain passage de garde (qui a coché, quand) : les cases se remettent à zéro après chaque passage. L'endpoint renvoie le passage concerné, les éléments par enfant et le nombre d'éléments cochés.
 
 ## 5. Événements
 - Champs : titre, type (rendez-vous, activité, école, autre), enfants concernés, début et fin (ou journée entière), lieu, rappel, visibilité (partagé ou privé), auteur.

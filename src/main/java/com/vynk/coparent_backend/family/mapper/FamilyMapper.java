@@ -9,11 +9,12 @@ import com.vynk.coparent_backend.family.entity.CustodySchedule;
 import com.vynk.coparent_backend.family.entity.Family;
 import com.vynk.coparent_backend.family.entity.FamilyMember;
 import org.mapstruct.Mapper;
+import org.mapstruct.MappingConstants;
 import org.mapstruct.Mapping;
 
 import java.util.List;
 
-@Mapper
+@Mapper(componentModel = MappingConstants.ComponentModel.SPRING)
 public interface FamilyMapper {
 
     @Mapping(target = "userId", source = "user.id")

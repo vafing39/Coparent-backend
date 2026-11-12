@@ -7,6 +7,7 @@ import com.vynk.coparent_backend.auth.dto.RefreshTokenRequest;
 import com.vynk.coparent_backend.auth.dto.ResetPasswordRequest;
 import com.vynk.coparent_backend.auth.dto.SignupRequest;
 import com.vynk.coparent_backend.auth.dto.VerifyEmailRequest;
+import com.vynk.coparent_backend.auth.mapper.AuthMapper;
 import com.vynk.coparent_backend.user.dto.UserResponse;
 import com.vynk.coparent_backend.user.mapper.UserMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 import com.vynk.coparent_backend.auth.service.AuthService;
-import com.vynk.coparent_backend.auth.mapper.AuthMapper;
 
 @RestController
 @RequestMapping("/api/v1/auth")

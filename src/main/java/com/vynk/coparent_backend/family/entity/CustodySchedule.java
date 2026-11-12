@@ -14,8 +14,10 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcType;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.descriptor.jdbc.LocalTimeJdbcType;
 import com.vynk.coparent_backend.user.entity.User;
 
 import java.time.Instant;
@@ -56,8 +58,13 @@ public class CustodySchedule {
     @Column(nullable = false)
     private LocalDate startDate;
 
-    /** Europe/Paris wall-clock time (not UTC): 17:50 stays 17:50 across DST changes. */
+    /**
+     * Europe/Paris wall-clock time (not UTC): 17:50 stays 17:50 across DST changes. Bound as a plain
+     * {@code LocalTime}: without {@code LocalTimeJdbcType}, {@code hibernate.jdbc.time_zone: UTC} would store
+     * 17:50 as 16:50 (converted from the JVM zone on 1970-01-01).
+     */
     @Column(nullable = false)
+    @JdbcType(LocalTimeJdbcType.class)
     private LocalTime handoverTime;
 
     @Enumerated(EnumType.STRING)

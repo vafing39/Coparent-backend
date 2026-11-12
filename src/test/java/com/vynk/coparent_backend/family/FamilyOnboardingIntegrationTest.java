@@ -104,6 +104,11 @@ class FamilyOnboardingIntegrationTest {
                 .andExpect(jsonPath("$.handoverTime").value("17:50:00"))
                 .andExpect(jsonPath("$.startDate").value("2026-11-13"))
                 .andExpect(jsonPath("$.status").value("PROPOSED"));
+        // ... and is stored as such, not converted to UTC (17:50 would become 16:50)
+        String stored = jdbc.queryForObject(
+                "SELECT TIME_FORMAT(handover_time, '%H:%i:%s') FROM custody_schedules WHERE family_id = UUID_TO_BIN(?)",
+                String.class, familyId);
+        assertThat(stored).isEqualTo("17:50:00");
 
         // Step 5
         String invitation = call(camille, HttpMethod.POST, "/api/v1/families/" + familyId + "/invitations",
