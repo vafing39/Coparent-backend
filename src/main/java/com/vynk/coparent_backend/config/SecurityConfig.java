@@ -42,6 +42,8 @@ public class SecurityConfig {
                         // Lien d'invitation ouvert dans l'app : fichiers de vérification et page web d'atterrissage.
                         .requestMatchers(HttpMethod.GET, "/.well-known/apple-app-site-association",
                                 "/.well-known/assetlinks.json", "/invitation").permitAll()
+                        // WebSocket de la messagerie : le jeton est vérifié au CONNECT STOMP (StompAuthInterceptor).
+                        .requestMatchers("/ws").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
         return http.build();
