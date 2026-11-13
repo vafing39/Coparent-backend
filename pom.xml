@@ -146,8 +146,8 @@
                     <url>
                         jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true
                     </url>
-                    <user>root</user>
-                    <password>40416804</password>
+                    <!-- Identifiants hors du dépôt : variables FLYWAY_USER et FLYWAY_PASSWORD,
+                         ou -Dflyway.user=… -Dflyway.password=… -->
                     <cleanDisabled>false</cleanDisabled>
                 </configuration>
             </plugin>

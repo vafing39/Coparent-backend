@@ -2,9 +2,9 @@ spring:
   application:
     name: Coparent backend
   datasource:
-    url: jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true
-    username: root
-    password: 40416804
+    url: ${DB_URL:jdbc:mysql://localhost:3306/coparent?createDatabaseIfNotExist=true}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}  # local values live in config/application.yaml (git-ignored)
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}  # Mailpit default (local dev inbox at http://localhost:8025)
