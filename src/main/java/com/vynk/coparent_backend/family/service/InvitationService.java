@@ -42,6 +42,7 @@ public class InvitationService {
     private final ChildRepository childRepository;
     private final FamilyAccess familyAccess;
     private final FamilyService familyService;
+    private final CustodyScheduleService scheduleService;
     private final TokenService tokenService;
     private final AuthProperties properties;
     private final FamilyMapper mapper;
@@ -84,7 +85,7 @@ public class InvitationService {
                 invitation.getExpiresAt());
     }
 
-    /** The invitee becomes parent B. The rhythm stays PROPOSED until they validate it (custody feature). */
+    /** The invitee becomes parent B. The rhythm stays PROPOSED until they validate it (« À traiter »). */
     @Transactional
     public FamilyResponse accept(String rawToken, UUID userId) {
         Instant now = clock.instant();
@@ -111,6 +112,7 @@ public class InvitationService {
             throw ApiException.conflict(FAMILY_FULL);
         }
         invitation.accept(user, now);
+        scheduleService.askNewParent(family, user);
 
         return familyService.view(family, member);
     }

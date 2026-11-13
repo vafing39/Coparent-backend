@@ -27,6 +27,8 @@ public interface FamilyMapper {
 
     List<MemberResponse> toMemberResponses(List<FamilyMember> members);
 
+    @Mapping(target = "proposedById", source = "proposedBy.id")
+    @Mapping(target = "proposedByFirstName", source = "proposedBy.firstName")
     CustodyScheduleResponse toResponse(CustodySchedule schedule);
 
     /** The family as seen by {@code me}. */

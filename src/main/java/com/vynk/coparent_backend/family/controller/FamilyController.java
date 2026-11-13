@@ -92,6 +92,20 @@ public class FamilyController {
         return scheduleService.propose(familyId, userId(jwt), request);
     }
 
+    /** Une version du rythme (celle à valider, ouverte depuis « À traiter »). */
+    @GetMapping("/{familyId}/custody-schedules/{scheduleId}")
+    public CustodyScheduleResponse schedule(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                            @PathVariable UUID scheduleId) {
+        return scheduleService.get(familyId, scheduleId, userId(jwt));
+    }
+
+    /** L'autre parent valide le rythme proposé : il s'applique. */
+    @PostMapping("/{familyId}/custody-schedules/{scheduleId}/accept")
+    public CustodyScheduleResponse acceptSchedule(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                                  @PathVariable UUID scheduleId) {
+        return scheduleService.accept(familyId, scheduleId, userId(jwt));
+    }
+
     /** Chez qui sont les enfants chaque nuit de {@code from} à {@code to} (92 jours au plus), et les passages. */
     @GetMapping("/{familyId}/custody")
     public CustodyResponse custody(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,

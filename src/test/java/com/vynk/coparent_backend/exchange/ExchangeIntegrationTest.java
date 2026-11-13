@@ -270,7 +270,7 @@ class ExchangeIntegrationTest {
         return familyId;
     }
 
-    /** L'autre parent rejoint par une invitation. */
+    /** L'autre parent rejoint par une invitation et valide le rythme proposé. */
     private void join(Account inviter, Account invitee, String familyId) throws Exception {
         String invitation = call(inviter, HttpMethod.POST, "/api/v1/families/" + familyId + "/invitations",
                 "{\"inviteeFirstName\":\"Julien\"}")
@@ -279,6 +279,11 @@ class ExchangeIntegrationTest {
         String link = JsonPath.read(invitation, "$.link");
         String token = link.substring(link.indexOf("token=") + "token=".length());
         call(invitee, HttpMethod.POST, "/api/v1/invitations/" + token + "/accept", null).andExpect(status().isOk());
+        String toDo = call(invitee, HttpMethod.GET, "/api/v1/families/" + familyId + "/to-do", null)
+                .andReturn().getResponse().getContentAsString();
+        String scheduleId = JsonPath.read(toDo, "$.mine[0].targetId");
+        call(invitee, HttpMethod.POST, "/api/v1/families/" + familyId + "/custody-schedules/" + scheduleId + "/accept",
+                null).andExpect(status().isOk());
     }
 
     private ResultActions call(Account account, HttpMethod method, String path, String json) throws Exception {

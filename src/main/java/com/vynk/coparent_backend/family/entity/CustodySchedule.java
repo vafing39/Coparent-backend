@@ -111,4 +111,18 @@ public class CustodySchedule {
         this.holidayFirstHalfEvenYears = holidayFirstHalfEvenYears;
         this.summerSplit = summerSplit;
     }
+
+    /** Validé par l'autre parent : ce rythme s'applique (l'ancien ACTIVE doit être remplacé avant). */
+    public void activate(User decider, Instant now) {
+        this.status = ScheduleStatus.ACTIVE;
+        this.decidedBy = decider;
+        this.decidedAt = now;
+    }
+
+    /** Remplacé par une autre version (contre-proposition, ou nouveau rythme validé). */
+    public void replace(User decider, Instant now) {
+        this.status = ScheduleStatus.REPLACED;
+        this.decidedBy = decider;
+        this.decidedAt = now;
+    }
 }
