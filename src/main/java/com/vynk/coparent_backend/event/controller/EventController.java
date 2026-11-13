@@ -2,6 +2,9 @@ package com.vynk.coparent_backend.event.controller;
 
 import com.vynk.coparent_backend.event.dto.EventRequest;
 import com.vynk.coparent_backend.event.dto.EventResponse;
+import com.vynk.coparent_backend.event.dto.EventScope;
+import com.vynk.coparent_backend.event.dto.RepeatPreviewDate;
+import com.vynk.coparent_backend.event.dto.RepeatPreviewRequest;
 import com.vynk.coparent_backend.event.service.EventService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -46,23 +49,39 @@ public class EventController {
         return eventService.create(familyId, userId(jwt), request);
     }
 
+    /** Prochaines dates d'une répétition, prévues ou non, avant l'enregistrement. */
+    @PostMapping("/repeat-preview")
+    public List<RepeatPreviewDate> repeatPreview(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                                 @Valid @RequestBody RepeatPreviewRequest request) {
+        return eventService.preview(familyId, userId(jwt), request);
+    }
+
     @GetMapping("/{eventId}")
     public EventResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
-                             @PathVariable UUID eventId) {
-        return eventService.get(familyId, userId(jwt), eventId);
+                             @PathVariable UUID eventId,
+                             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                             LocalDate date) {
+        return eventService.get(familyId, userId(jwt), eventId, date);
     }
 
     @PutMapping("/{eventId}")
     public EventResponse update(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
-                                @PathVariable UUID eventId, @Valid @RequestBody EventRequest request) {
-        return eventService.update(familyId, userId(jwt), eventId, request);
+                                @PathVariable UUID eventId,
+                                @RequestParam(required = false) EventScope scope,
+                                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                                LocalDate date,
+                                @Valid @RequestBody EventRequest request) {
+        return eventService.update(familyId, userId(jwt), eventId, scope, date, request);
     }
 
     @DeleteMapping("/{eventId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
-                       @PathVariable UUID eventId) {
-        eventService.delete(familyId, userId(jwt), eventId);
+                       @PathVariable UUID eventId,
+                       @RequestParam(required = false) EventScope scope,
+                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+                       LocalDate date) {
+        eventService.delete(familyId, userId(jwt), eventId, scope, date);
     }
 
     private static UUID userId(Jwt jwt) {

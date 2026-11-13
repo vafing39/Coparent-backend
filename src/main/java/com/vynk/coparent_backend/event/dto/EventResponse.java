@@ -12,7 +12,8 @@ import java.util.UUID;
 
 /**
  * Un événement, en heure de Paris ({@code startTime}/{@code endTime} null pour une journée entière).
- * {@code authorFirstName} : null si le compte a été supprimé ; {@code mine} : j'en suis l'auteur.
+ * {@code authorFirstName} : null si le compte a été supprimé ; {@code mine} : j'en suis l'auteur. Pour un événement
+ * répété, chaque séance est renvoyée avec le même {@code id}, sa propre {@code date} et la règle {@code repeat}.
  */
 public record EventResponse(
         UUID id,
@@ -28,6 +29,7 @@ public record EventResponse(
         EventVisibility visibility,
         String authorFirstName,
         boolean mine,
+        RepeatResponse repeat,
         Instant createdAt,
         Instant updatedAt
 ) {

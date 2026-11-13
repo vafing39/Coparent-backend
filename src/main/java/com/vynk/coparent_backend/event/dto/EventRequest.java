@@ -3,6 +3,7 @@ package com.vynk.coparent_backend.event.dto;
 import com.vynk.coparent_backend.event.entity.EventReminder;
 import com.vynk.coparent_backend.event.entity.EventType;
 import com.vynk.coparent_backend.event.entity.EventVisibility;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -15,7 +16,8 @@ import java.util.UUID;
 
 /**
  * Création ou modification d'un événement. {@code date}, {@code startTime} et {@code endTime} sont en heure de
- * Paris ; les heures sont absentes pour une journée entière.
+ * Paris ; les heures sont absentes pour une journée entière. {@code repeat} : null pour un événement unique ; sinon
+ * {@code date} est la première séance.
  */
 public record EventRequest(
         @NotBlank @Size(max = 100) String title,
@@ -27,6 +29,7 @@ public record EventRequest(
         LocalTime endTime,
         @Size(max = 200) String location,
         @NotNull EventReminder reminder,
-        @NotNull EventVisibility visibility
+        @NotNull EventVisibility visibility,
+        @Valid RepeatRequest repeat
 ) {
 }

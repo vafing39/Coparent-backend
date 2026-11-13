@@ -3,7 +3,10 @@ package com.vynk.coparent_backend.event.entity;
 import com.vynk.coparent_backend.family.entity.Child;
 import com.vynk.coparent_backend.family.entity.Family;
 import com.vynk.coparent_backend.user.entity.User;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -22,6 +25,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -84,6 +89,17 @@ public class Event {
     @Column(nullable = false)
     private EventVisibility visibility;
 
+    /** Null : événement unique. Sinon, la date de l'événement est la première séance de la série. */
+    @Embedded
+    private EventRepeat repeat;
+
+    /** Séances retirées de la série (supprimées seules, ou remplacées par un événement modifié). */
+    @ElementCollection
+    @CollectionTable(name = "event_exceptions",
+            joinColumns = @JoinColumn(name = "event_id", columnDefinition = "binary(16)"))
+    @Column(name = "occurrence_date")
+    private Set<LocalDate> skippedDates = new HashSet<>();
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -110,6 +126,33 @@ public class Event {
         this.location = location;
         this.reminder = reminder;
         this.visibility = visibility;
+        this.updatedAt = now;
+    }
+
+    public boolean isRepeating() {
+        return repeat != null && repeat.getFrequency() != null;
+    }
+
+    /** Règle de répétition (null : événement unique). */
+    public void repeat(EventRepeat repeat, Instant now) {
+        this.repeat = repeat;
+        this.updatedAt = now;
+    }
+
+    /** Retire une séance de la série. */
+    public void skip(LocalDate occurrence, Instant now) {
+        this.skippedDates.add(occurrence);
+        this.updatedAt = now;
+    }
+
+    /** La série repart de zéro (modifiée en entier) : plus aucune séance retirée. */
+    public void clearSkippedDates() {
+        this.skippedDates.clear();
+    }
+
+    /** Arrête la série : plus aucune séance après {@code lastDay}. */
+    public void endRepeatOn(LocalDate lastDay, Instant now) {
+        this.repeat = repeat.endingOn(lastDay);
         this.updatedAt = now;
     }
 
