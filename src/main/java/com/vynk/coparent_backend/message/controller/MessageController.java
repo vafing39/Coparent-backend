@@ -1,5 +1,7 @@
 package com.vynk.coparent_backend.message.controller;
 
+import com.vynk.coparent_backend.message.dto.ConversationResponse;
+import com.vynk.coparent_backend.message.dto.CreateConversationRequest;
 import com.vynk.coparent_backend.message.dto.MessagePageResponse;
 import com.vynk.coparent_backend.message.dto.MessageResponse;
 import com.vynk.coparent_backend.message.dto.ReadRequest;
@@ -19,35 +21,49 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
-/** Messagerie entre parents : pas de modification ni de suppression, par conception. */
+/** Discussions par sujet entre parents : ni modification ni suppression, par conception. */
 @RestController
-@RequestMapping("/api/v1/families/{familyId}/messages")
+@RequestMapping("/api/v1/families/{familyId}/conversations")
 @RequiredArgsConstructor
 public class MessageController {
 
     private final MessageService messageService;
 
     @GetMapping
-    public MessagePageResponse list(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
-                                    @RequestParam(required = false) Long before,
-                                    @RequestParam(required = false) Integer limit) {
-        return messageService.list(familyId, userId(jwt), before, limit);
+    public List<ConversationResponse> conversations(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId) {
+        return messageService.conversations(familyId, userId(jwt));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public MessageResponse send(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
-                                @Valid @RequestBody SendMessageRequest request) {
-        return messageService.send(familyId, userId(jwt), request.body());
+    public ConversationResponse create(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                       @Valid @RequestBody CreateConversationRequest request) {
+        return messageService.createConversation(familyId, userId(jwt), request.subject(), request.body());
     }
 
-    @PostMapping("/read")
+    @GetMapping("/{conversationId}/messages")
+    public MessagePageResponse messages(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                        @PathVariable UUID conversationId,
+                                        @RequestParam(required = false) Long before,
+                                        @RequestParam(required = false) Integer limit) {
+        return messageService.list(familyId, userId(jwt), conversationId, before, limit);
+    }
+
+    @PostMapping("/{conversationId}/messages")
+    @ResponseStatus(HttpStatus.CREATED)
+    public MessageResponse send(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                @PathVariable UUID conversationId, @Valid @RequestBody SendMessageRequest request) {
+        return messageService.send(familyId, userId(jwt), conversationId, request.body());
+    }
+
+    @PostMapping("/{conversationId}/read")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void read(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
-                     @Valid @RequestBody ReadRequest request) {
-        messageService.markRead(familyId, userId(jwt), request.upToSeq());
+                     @PathVariable UUID conversationId, @Valid @RequestBody ReadRequest request) {
+        messageService.markRead(familyId, userId(jwt), conversationId, request.upToSeq());
     }
 
     private static UUID userId(Jwt jwt) {

@@ -21,7 +21,8 @@ import java.util.UUID;
 
 /**
  * Message entre parents. Immuable : aucun setter, {@code @Immutable} côté Hibernate, et des triggers en base
- * qui refusent toute modification ou suppression. {@code hash} chaîne le message au précédent de la famille.
+ * qui refusent toute modification ou suppression. Il appartient à une discussion ; {@code hash} le chaîne au
+ * message précédent de la famille (une seule chaîne pour toutes ses discussions).
  */
 @Entity
 @Table(name = "messages")
@@ -39,6 +40,10 @@ public class Message {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "family_id", nullable = false, columnDefinition = "binary(16)")
     private Family family;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "conversation_id", nullable = false, columnDefinition = "binary(16)")
+    private Conversation conversation;
 
     /** Null si le compte a été supprimé. */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -60,9 +65,10 @@ public class Message {
     @Column(nullable = false, length = 64, columnDefinition = "char(64)")
     private String hash;
 
-    public Message(Family family, User sender, long seq, String body, Instant createdAt, String prevHash,
-                   String hash) {
+    public Message(Family family, Conversation conversation, User sender, long seq, String body,
+                   Instant createdAt, String prevHash, String hash) {
         this.family = family;
+        this.conversation = conversation;
         this.sender = sender;
         this.seq = seq;
         this.body = body;

@@ -83,23 +83,29 @@ class MessageRealtimeIntegrationTest {
         Account julien = verifiedUser("Julien");
         String familyId = familyOf(camille);
         join(camille, julien, familyId);
-        String messages = "/api/v1/families/" + familyId + "/messages";
+        String conversations = "/api/v1/families/" + familyId + "/conversations";
 
         StompSession session = connect(julien.accessToken());
         BlockingQueue<String> received = subscribe(session, "/topic/families/" + familyId + "/messages");
 
-        call(camille, HttpMethod.POST, messages, "{\"body\":\"Bonjour\"}").andExpect(status().isCreated());
+        String body = call(camille, HttpMethod.POST, conversations, "{\"subject\":\"Rentrée\",\"body\":\"Bonjour\"}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String conversationId = JsonPath.read(body, "$.id");
         String event = received.poll(5, TimeUnit.SECONDS);
         assertThat(event).isNotNull();
         assertThat((String) JsonPath.read(event, "$.type")).isEqualTo("MESSAGE");
+        assertThat((String) JsonPath.read(event, "$.conversationId")).isEqualTo(conversationId);
+        assertThat((String) JsonPath.read(event, "$.message.conversationId")).isEqualTo(conversationId);
         assertThat((String) JsonPath.read(event, "$.message.body")).isEqualTo("Bonjour");
         assertThat((String) JsonPath.read(event, "$.message.senderId")).isEqualTo(camille.id());
         assertThat((String) JsonPath.read(event, "$.message.createdAt")).endsWith("Z");
 
-        call(julien, HttpMethod.POST, messages + "/read", "{\"upToSeq\":1}").andExpect(status().isNoContent());
+        call(julien, HttpMethod.POST, conversations + "/" + conversationId + "/read", "{\"upToSeq\":1}")
+                .andExpect(status().isNoContent());
         String read = received.poll(5, TimeUnit.SECONDS);
         assertThat(read).isNotNull();
         assertThat((String) JsonPath.read(read, "$.type")).isEqualTo("READ");
+        assertThat((String) JsonPath.read(read, "$.conversationId")).isEqualTo(conversationId);
         assertThat((String) JsonPath.read(read, "$.readerId")).isEqualTo(julien.id());
         assertThat((Integer) JsonPath.read(read, "$.upToSeq")).isEqualTo(1);
     }
@@ -120,7 +126,8 @@ class MessageRealtimeIntegrationTest {
 
         StompSession session = connect(stranger.accessToken());
         BlockingQueue<String> received = subscribe(session, "/topic/families/" + familyId + "/messages");
-        call(camille, HttpMethod.POST, "/api/v1/families/" + familyId + "/messages", "{\"body\":\"Privé\"}")
+        call(camille, HttpMethod.POST, "/api/v1/families/" + familyId + "/conversations",
+                        "{\"subject\":\"Privé\",\"body\":\"Privé\"}")
                 .andExpect(status().isCreated());
 
         assertThat(received.poll(2, TimeUnit.SECONDS)).isNull();

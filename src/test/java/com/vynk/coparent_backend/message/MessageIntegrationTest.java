@@ -75,87 +75,112 @@ class MessageIntegrationTest {
     }
 
     @Test
-    void conversationBetweenTheTwoParents() throws Exception {
+    void discussionsBySubjectBetweenTheTwoParents() throws Exception {
         Account camille = verifiedUser("Camille");
         Account julien = verifiedUser("Julien");
         String familyId = familyOf(camille);
-        String messages = "/api/v1/families/" + familyId + "/messages";
+        String conversations = "/api/v1/families/" + familyId + "/conversations";
 
         // Seul : la messagerie n'est pas encore ouverte
-        call(camille, HttpMethod.POST, messages, send("Bonjour")).andExpect(status().isConflict());
+        call(camille, HttpMethod.POST, conversations, open("Rentrée", "Bonjour")).andExpect(status().isConflict());
         join(camille, julien, familyId);
 
-        call(camille, HttpMethod.POST, messages, send("  Hugo a oublié son kimono.  "))
+        String kimono = id(call(camille, HttpMethod.POST, conversations,
+                open("  Kimono de Hugo  ", "  Hugo a oublié son kimono.  "))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.seq").value(1))
-                .andExpect(jsonPath("$.body").value("Hugo a oublié son kimono."))
-                .andExpect(jsonPath("$.senderId").value(camille.id()))
-                .andExpect(jsonPath("$.senderFirstName").value("Camille"))
-                .andExpect(jsonPath("$.createdAt", notNullValue()))
-                .andExpect(jsonPath("$.readAt", nullValue()));
-        call(julien, HttpMethod.POST, messages, send("Merci, je préviens la maîtresse."))
-                .andExpect(jsonPath("$.seq").value(2));
-        call(camille, HttpMethod.POST, messages, send("Parfait.")).andExpect(jsonPath("$.seq").value(3));
+                .andExpect(jsonPath("$.subject").value("Kimono de Hugo"))
+                .andExpect(jsonPath("$.authorFirstName").value("Camille"))
+                .andExpect(jsonPath("$.unreadCount").value(0))
+                .andExpect(jsonPath("$.lastMessage.seq").value(1))
+                .andExpect(jsonPath("$.lastMessage.body").value("Hugo a oublié son kimono."))
+                .andExpect(jsonPath("$.lastMessage.senderId").value(camille.id())));
+        String noel = id(call(julien, HttpMethod.POST, conversations, open("Vacances de Noël", "Je propose du 19 au 26."))
+                .andExpect(status().isCreated()));
+        String kimonoMessages = conversations + "/" + kimono + "/messages";
+        call(julien, HttpMethod.POST, kimonoMessages, send("Merci, je préviens la maîtresse."))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.seq").value(3))
+                .andExpect(jsonPath("$.conversationId").value(kimono));
+        call(camille, HttpMethod.POST, kimonoMessages, send("Parfait.")).andExpect(jsonPath("$.seq").value(4));
 
-        call(julien, messages)
+        // Liste : la plus récemment active d'abord, non-lus par discussion
+        call(julien, conversations)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.messages", hasSize(3)))
-                .andExpect(jsonPath("$.messages[0].body").value("Hugo a oublié son kimono."))
-                .andExpect(jsonPath("$.messages[2].body").value("Parfait."))
-                .andExpect(jsonPath("$.hasMore").value(false));
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].id").value(kimono))
+                .andExpect(jsonPath("$[0].lastMessage.body").value("Parfait."))
+                .andExpect(jsonPath("$[0].unreadCount").value(2))
+                .andExpect(jsonPath("$[1].id").value(noel))
+                .andExpect(jsonPath("$[1].unreadCount").value(0));
+        call(camille, conversations)
+                .andExpect(jsonPath("$[0].unreadCount").value(1))
+                .andExpect(jsonPath("$[1].unreadCount").value(1));
 
-        // Pages : les plus récents d'abord, puis ceux d'avant
-        call(julien, messages + "?limit=2")
-                .andExpect(jsonPath("$.messages[*].seq", contains(2, 3)))
+        // Messages d'une discussion seulement, par pages
+        call(julien, kimonoMessages)
+                .andExpect(jsonPath("$.messages[*].seq", contains(1, 3, 4)))
+                .andExpect(jsonPath("$.hasMore").value(false));
+        call(julien, kimonoMessages + "?limit=2")
+                .andExpect(jsonPath("$.messages[*].seq", contains(3, 4)))
                 .andExpect(jsonPath("$.hasMore").value(true));
-        call(julien, messages + "?limit=2&before=2")
+        call(julien, kimonoMessages + "?limit=2&before=3")
                 .andExpect(jsonPath("$.messages[*].seq", contains(1)))
                 .andExpect(jsonPath("$.hasMore").value(false));
 
-        // Julien lit jusqu'au 3 : seuls les messages de Camille deviennent « lus »
-        call(julien, HttpMethod.POST, messages + "/read", "{\"upToSeq\":3}").andExpect(status().isNoContent());
-        call(camille, messages)
+        // Julien lit la discussion du kimono : seuls les messages de Camille deviennent « lus »
+        call(julien, HttpMethod.POST, conversations + "/" + kimono + "/read", "{\"upToSeq\":4}")
+                .andExpect(status().isNoContent());
+        call(camille, kimonoMessages)
                 .andExpect(jsonPath("$.messages[0].readAt", notNullValue()))
                 .andExpect(jsonPath("$.messages[1].readAt", nullValue()))
                 .andExpect(jsonPath("$.messages[2].readAt", notNullValue()));
+        call(julien, conversations)
+                .andExpect(jsonPath("$[0].unreadCount").value(0))
+                .andExpect(jsonPath("$[0].lastMessage.readAt", notNullValue()));
         // Relire ne change pas l'heure de lecture
-        String readAt = JsonPath.read(call(camille, messages).andReturn().getResponse().getContentAsString(),
+        String readAt = JsonPath.read(call(camille, kimonoMessages).andReturn().getResponse().getContentAsString(),
                 "$.messages[0].readAt");
-        call(julien, HttpMethod.POST, messages + "/read", "{\"upToSeq\":3}").andExpect(status().isNoContent());
-        call(camille, messages).andExpect(jsonPath("$.messages[0].readAt").value(readAt));
+        call(julien, HttpMethod.POST, conversations + "/" + kimono + "/read", "{\"upToSeq\":4}")
+                .andExpect(status().isNoContent());
+        call(camille, kimonoMessages).andExpect(jsonPath("$.messages[0].readAt").value(readAt));
 
-        // Hash chaîné intact
+        // Une seule chaîne de hash pour toute la famille, intacte
         UUID family = UUID.fromString(familyId);
         Boolean intact = transaction.execute(tx -> hasher.verify(messageRepository.findByFamilyIdOrderBySeqAsc(family)));
         assertThat(intact).isTrue();
     }
 
     @Test
-    void messagesCannotBeChangedOrDeletedEvenInTheDatabase() throws Exception {
+    void discussionsAndMessagesCannotBeChangedOrDeletedEvenInTheDatabase() throws Exception {
         Account camille = verifiedUser("Camille");
         Account julien = verifiedUser("Julien");
         String familyId = familyOf(camille);
         join(camille, julien, familyId);
-        call(camille, HttpMethod.POST, "/api/v1/families/" + familyId + "/messages", send("Texte d'origine"))
-                .andExpect(status().isCreated());
+        String conversation = id(call(camille, HttpMethod.POST, "/api/v1/families/" + familyId + "/conversations",
+                open("Sujet d'origine", "Texte d'origine")).andExpect(status().isCreated()));
 
         assertThatThrownBy(() -> jdbc.update("UPDATE messages SET body = 'Texte changé' WHERE family_id = UUID_TO_BIN(?)",
                 familyId)).isInstanceOf(DataAccessException.class).hasMessageContaining("ne peut pas être modifié");
         assertThatThrownBy(() -> jdbc.update("DELETE FROM messages WHERE family_id = UUID_TO_BIN(?)", familyId))
                 .isInstanceOf(DataAccessException.class).hasMessageContaining("ne peut pas être supprimé");
+        assertThatThrownBy(() -> jdbc.update("UPDATE conversations SET subject = 'Autre' WHERE id = UUID_TO_BIN(?)",
+                conversation)).isInstanceOf(DataAccessException.class).hasMessageContaining("ne peut pas être modifiée");
+        assertThatThrownBy(() -> jdbc.update("DELETE FROM conversations WHERE id = UUID_TO_BIN(?)", conversation))
+                .isInstanceOf(DataAccessException.class).hasMessageContaining("ne peut pas être supprimée");
         // Aucune route de modification ou de suppression
-        call(camille, HttpMethod.PUT, "/api/v1/families/" + familyId + "/messages", send("x"))
-                .andExpect(status().is4xxClientError());
-        call(camille, HttpMethod.DELETE, "/api/v1/families/" + familyId + "/messages", null)
+        String messages = "/api/v1/families/" + familyId + "/conversations/" + conversation + "/messages";
+        call(camille, HttpMethod.PUT, messages, send("x")).andExpect(status().is4xxClientError());
+        call(camille, HttpMethod.DELETE, messages, null).andExpect(status().is4xxClientError());
+        call(camille, HttpMethod.DELETE, "/api/v1/families/" + familyId + "/conversations/" + conversation, null)
                 .andExpect(status().is4xxClientError());
 
-        // Une modification faite malgré tout (triggers retirés) se voit dans la chaîne
+        // Une modification faite malgré tout (triggers retirés) se verrait dans la chaîne
         UUID family = UUID.fromString(familyId);
         transaction.executeWithoutResult(tx -> {
             var stored = messageRepository.findByFamilyIdOrderBySeqAsc(family);
             assertThat(hasher.verify(stored)).isTrue();
-            assertThat(hasher.hash(family, 1, UUID.fromString(camille.id()), stored.getFirst().getCreatedAt(), null,
-                    "Texte changé")).isNotEqualTo(stored.getFirst().getHash());
+            assertThat(hasher.hash(family, UUID.fromString(conversation), 1, UUID.fromString(camille.id()),
+                    stored.getFirst().getCreatedAt(), null, "Texte changé")).isNotEqualTo(stored.getFirst().getHash());
         });
     }
 
@@ -164,17 +189,40 @@ class MessageIntegrationTest {
         Account camille = verifiedUser("Camille");
         Account julien = verifiedUser("Julien");
         Account stranger = verifiedUser("Inconnu");
+        Account otherParent = verifiedUser("Autre");
+        Account otherInvitee = verifiedUser("Invité");
         String familyId = familyOf(camille);
         join(camille, julien, familyId);
-        String messages = "/api/v1/families/" + familyId + "/messages";
+        String otherFamily = familyOf(otherParent);
+        join(otherParent, otherInvitee, otherFamily);
+        String conversations = "/api/v1/families/" + familyId + "/conversations";
+        String conversation = id(call(camille, HttpMethod.POST, conversations, open("Rentrée", "Bonjour")));
+        String messages = conversations + "/" + conversation + "/messages";
 
+        call(camille, HttpMethod.POST, conversations, open("   ", "Bonjour")).andExpect(status().isBadRequest());
+        call(camille, HttpMethod.POST, conversations, open("a".repeat(81), "Bonjour")).andExpect(status().isBadRequest());
+        call(camille, HttpMethod.POST, conversations, open("Rentrée", " ")).andExpect(status().isBadRequest());
         call(camille, HttpMethod.POST, messages, send("   ")).andExpect(status().isBadRequest());
         call(camille, HttpMethod.POST, messages, send("a".repeat(2001))).andExpect(status().isBadRequest());
         call(camille, HttpMethod.POST, messages, send("a".repeat(2000))).andExpect(status().isCreated());
-        call(camille, HttpMethod.POST, messages + "/read", "{\"upToSeq\":0}").andExpect(status().isBadRequest());
+        call(camille, HttpMethod.POST, conversations + "/" + conversation + "/read", "{\"upToSeq\":0}")
+                .andExpect(status().isBadRequest());
+        // Non-membre, et discussion d'une autre famille ou inconnue
+        call(stranger, conversations).andExpect(status().isNotFound());
         call(stranger, messages).andExpect(status().isNotFound());
         call(stranger, HttpMethod.POST, messages, send("Bonjour")).andExpect(status().isNotFound());
-        call(stranger, HttpMethod.POST, messages + "/read", "{\"upToSeq\":1}").andExpect(status().isNotFound());
+        String foreign = "/api/v1/families/" + otherFamily + "/conversations/" + conversation + "/messages";
+        call(otherParent, foreign).andExpect(status().isNotFound());
+        call(otherParent, HttpMethod.POST, foreign, send("Bonjour")).andExpect(status().isNotFound());
+        call(camille, conversations + "/" + UUID.randomUUID() + "/messages").andExpect(status().isNotFound());
+    }
+
+    private static String open(String subject, String body) {
+        return "{\"subject\":\"" + subject + "\",\"body\":\"" + body + "\"}";
+    }
+
+    private static String id(ResultActions result) throws Exception {
+        return JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.id");
     }
 
     private static String send(String body) {
