@@ -8,6 +8,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -53,6 +54,28 @@ public class SmtpEmailSender implements EmailSender {
                         + "de cette demande, ignorez cet email : votre mot de passe reste inchangé.");
     }
 
+    @Async
+    @Override
+    public void sendDataExport(User user, String fileName, byte[] json) {
+        String greeting = "Bonjour " + user.getFirstName() + ",";
+        String intro = "Vous avez demandé vos données personnelles depuis l'application Coparent. Elles sont dans le "
+                + "fichier joint, au format JSON.";
+        String footer = "Ce fichier contient des informations sur votre famille : conservez-le en lieu sûr. Si vous "
+                + "n'êtes pas à l'origine de cette demande, changez votre mot de passe dans l'application.";
+        String text = greeting + "\n\n" + intro + "\n\n" + footer + "\n\nL'équipe Coparent\n";
+        String html = """
+                <!doctype html>
+                <html lang="fr"><body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; color: #1f2937; line-height: 1.5;">
+                <p>%s</p>
+                <p>%s</p>
+                <p style="font-size: 13px; color: #6b7280;">%s</p>
+                <p>L'équipe Coparent</p>
+                </body></html>
+                """.formatted(HtmlUtils.htmlEscape(greeting), HtmlUtils.htmlEscape(intro), HtmlUtils.htmlEscape(footer));
+        deliver(user, "Vos données Coparent", text, html,
+                helper -> helper.addAttachment(fileName, new ByteArrayResource(json), "application/json"));
+    }
+
     /** An email whose only content is a code to type in the app (no link). */
     private void sendCode(User user, String subject, String intro, String code, String footer) {
         String greeting = "Bonjour " + user.getFirstName() + ",";
@@ -69,10 +92,15 @@ public class SmtpEmailSender implements EmailSender {
                 </body></html>
                 """.formatted(HtmlUtils.htmlEscape(greeting), HtmlUtils.htmlEscape(intro), HtmlUtils.htmlEscape(shown),
                 HtmlUtils.htmlEscape(footer));
-        deliver(user, subject, text, html);
+        deliver(user, subject, text, html, helper -> {
+        });
     }
 
-    private void deliver(User user, String subject, String text, String html) {
+    private interface Attachments {
+        void add(MimeMessageHelper helper) throws MessagingException;
+    }
+
+    private void deliver(User user, String subject, String text, String html, Attachments attachments) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
@@ -80,6 +108,7 @@ public class SmtpEmailSender implements EmailSender {
             helper.setTo(user.getEmail());
             helper.setSubject(subject);
             helper.setText(text, html);
+            attachments.add(helper);
             mailSender.send(message);
         } catch (MailException | MessagingException e) {
             log.error("[email] Could not send \"{}\" to user {}: {}", subject, user.getId(), e.getMessage());

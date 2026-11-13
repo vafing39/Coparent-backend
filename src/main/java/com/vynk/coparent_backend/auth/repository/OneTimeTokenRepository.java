@@ -21,4 +21,8 @@ public interface OneTimeTokenRepository extends JpaRepository<OneTimeToken, UUID
     @Modifying
     @Query("update OneTimeToken t set t.usedAt = :now where t.user.id = :userId and t.type = :type and t.usedAt is null")
     int invalidateUnused(UUID userId, OneTimeTokenType type, Instant now);
+
+    @Modifying
+    @Query("delete from OneTimeToken t where t.user.id = :userId")
+    int deleteAllForUser(UUID userId);
 }

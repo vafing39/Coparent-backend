@@ -42,4 +42,14 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
 
     @EntityGraph(attributePaths = {"children", "author", "skippedDates", "repeatDays"})
     Optional<Event> findByIdAndFamilyId(UUID id, UUID familyId);
+
+    /** Tous les événements que {@code userId} peut voir (export des données). */
+    @EntityGraph(attributePaths = {"children", "author"})
+    @Query("""
+            select distinct e from Event e
+            where e.family.id = :familyId and (e.visibility = :shared or e.author.id = :userId)
+            order by e.startsAt asc
+            """)
+    List<Event> findAllVisible(@Param("familyId") UUID familyId, @Param("userId") UUID userId,
+                               @Param("shared") EventVisibility shared);
 }

@@ -57,6 +57,18 @@ class SmtpEmailSenderTest {
     }
 
     @Test
+    void dataExportIsAttachedAsJson() throws Exception {
+        sender.sendDataExport(user, "coparent-mes-donnees-2026-11-13.json",
+                "{\"account\":{}}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        MimeMessage message = sentMessage();
+        assertThat(message.getSubject()).isEqualTo("Vos données Coparent");
+        assertThat(raw(message)).contains("fichier joint").doesNotContain("http");
+        message.saveChanges();
+        assertThat(attachmentNames(message)).containsExactly("coparent-mes-donnees-2026-11-13.json");
+    }
+
+    @Test
     void smtpFailureDoesNotPropagate() {
         doThrow(new MailSendException("connection refused")).when(mailSender).send(any(MimeMessage.class));
 
@@ -75,6 +87,18 @@ class SmtpEmailSenderTest {
         StringBuilder text = new StringBuilder();
         collectText(message, text);
         return text.toString();
+    }
+
+    private static java.util.List<String> attachmentNames(Part part) throws Exception {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        if (part.getFileName() != null) {
+            names.add(part.getFileName());
+        } else if (part.getContent() instanceof Multipart multipart) {
+            for (int i = 0; i < multipart.getCount(); i++) {
+                names.addAll(attachmentNames(multipart.getBodyPart(i)));
+            }
+        }
+        return names;
     }
 
     private static void collectText(Part part, StringBuilder text) throws Exception {

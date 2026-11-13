@@ -195,6 +195,11 @@ public class AuthService {
         refreshTokenRepository.revokeAllForUser(user.getId(), now);
     }
 
+    /** A new session for a user whose identity was just checked (e.g. after a password change). */
+    public AuthSession newSession(User user) {
+        return startSession(user, UUID.randomUUID());
+    }
+
     private record IssuedSession(AuthSession session, RefreshToken refreshToken) {
     }
 

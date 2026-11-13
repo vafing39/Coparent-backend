@@ -4,6 +4,7 @@ import com.vynk.coparent_backend.family.entity.Family;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
@@ -15,4 +16,9 @@ public interface FamilyRepository extends JpaRepository<Family, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select f from Family f where f.id = :id")
     Optional<Family> findByIdForUpdate(UUID id);
+
+    /** Deletes the family; MySQL cascades remove everything that belongs to it (cascades fire no trigger). */
+    @Modifying
+    @Query("delete from Family f where f.id = :id")
+    int deleteFamily(UUID id);
 }

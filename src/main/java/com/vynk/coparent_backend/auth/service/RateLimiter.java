@@ -27,7 +27,11 @@ public class RateLimiter {
         /** Password-reset attempts (code typed in the app), per email and per IP. */
         PASSWORD_RESET(5, Duration.ofMinutes(15)),
         /** Wrong reset codes per account: once reached, the code is cancelled (window = code lifetime). */
-        PASSWORD_RESET_FAILURE(5, Duration.ofMinutes(30));
+        PASSWORD_RESET_FAILURE(5, Duration.ofMinutes(30)),
+        /** Current password typed to change the password or delete the account, per user. */
+        ACCOUNT_PASSWORD_CHECK(5, Duration.ofMinutes(15)),
+        /** Personal-data exports sent by email, per user. */
+        DATA_EXPORT(3, Duration.ofDays(1));
 
         private final int limit;
         private final Duration window;

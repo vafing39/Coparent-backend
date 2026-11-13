@@ -23,4 +23,10 @@ public class LoggingEmailSender implements EmailSender {
     public void sendPasswordReset(User user, String code) {
         log.info("[email] Password reset code for user {}: {}", user.getId(), code);
     }
+
+    @Override
+    public void sendDataExport(User user, String fileName, byte[] json) {
+        // Never the content: it is personal data.
+        log.info("[email] Data export for user {}: {} ({} bytes)", user.getId(), fileName, json.length);
+    }
 }

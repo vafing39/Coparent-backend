@@ -10,4 +10,7 @@ public interface EmailSender {
 
     /** {@code code}: the 8-digit password-reset code, typed by the user in the app. */
     void sendPasswordReset(User user, String code);
+
+    /** {@code json}: the user's personal data (spec §1), sent as an attachment named {@code fileName}. */
+    void sendDataExport(User user, String fileName, byte[] json);
 }
