@@ -65,6 +65,29 @@ class CustodyCalculatorTest {
     }
 
     @Test
+    void acceptedExchangeOverridesTheRhythmAndHolidays() {
+        // Une semaine sur deux, A du 13 au 19 décembre, B du 20 au 26 ; Noël 2026 : B a la 1re moitié.
+        CustodyCalculator calculator = new CustodyCalculator(
+                schedule(CustodyPattern.ALTERNATE_WEEKS, null, PARENT_B, SummerSplit.FORTNIGHTS),
+                List.of(NOEL_2026),
+                List.of(new CustodyOverride(START.plusDays(7), START.plusDays(8), PARENT_A),
+                        new CustodyOverride(LocalDate.of(2026, 12, 20), LocalDate.of(2026, 12, 20), PARENT_A)));
+
+        // Prise seule : A garde les deux premières nuits de B, puis passage le 22 novembre
+        assertThat(fortnight(calculator, START)).isEqualTo("AAAAAAAAABBBBB");
+        assertThat(calculator.nights(START.plusDays(7), START.plusDays(7)).getFirst().period())
+                .isEqualTo(CustodyPeriod.EXCHANGE);
+        assertThat(calculator.handovers(START.plusDays(7), START.plusDays(13)))
+                .containsExactly(new HandoverResponse(START.plusDays(9).atTime(HANDOVER), PARENT_A, PARENT_B));
+
+        // Pendant les vacances, l'échange passe avant la règle ; le nom des vacances reste
+        CustodyNightResponse noel = calculator.nights(LocalDate.of(2026, 12, 20), LocalDate.of(2026, 12, 20)).getFirst();
+        assertThat(noel.parent()).isEqualTo(PARENT_A);
+        assertThat(noel.period()).isEqualTo(CustodyPeriod.EXCHANGE);
+        assertThat(noel.holiday()).isEqualTo("Vacances de Noël");
+    }
+
+    @Test
     void startingParentBSwapsTheSequence() {
         CustodySchedule schedule = new CustodySchedule(null, null);
         schedule.define(CustodyPattern.ALTERNATE_WEEKS, null, START, HANDOVER, PARENT_B, null, null);

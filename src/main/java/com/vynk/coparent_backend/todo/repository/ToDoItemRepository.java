@@ -1,6 +1,7 @@
 package com.vynk.coparent_backend.todo.repository;
 
 import com.vynk.coparent_backend.todo.entity.ToDoItem;
+import com.vynk.coparent_backend.todo.entity.ToDoKind;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -17,4 +18,7 @@ public interface ToDoItemRepository extends JpaRepository<ToDoItem, UUID> {
     /** Une demande sans réponse de cette famille. */
     @EntityGraph(attributePaths = {"requestedBy", "assignee"})
     Optional<ToDoItem> findByIdAndFamilyIdAndResolvedAtIsNull(UUID id, UUID familyId);
+
+    /** Les demandes sans réponse qui portent sur cet objet (ex. un échange de garde). */
+    List<ToDoItem> findByFamilyIdAndKindAndTargetIdAndResolvedAtIsNull(UUID familyId, ToDoKind kind, UUID targetId);
 }

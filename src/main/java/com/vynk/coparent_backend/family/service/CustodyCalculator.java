@@ -33,7 +33,8 @@ import java.util.Optional;
  *   quinzaines 1-15 et 16-fin de juillet puis d'août, en alternance. Le premier parent suit la même règle
  *   d'année paire ou impaire.</li>
  * </ul>
- * Sans règle de vacances enregistrée, le rythme habituel continue pendant les vacances.
+ * Sans règle de vacances enregistrée, le rythme habituel continue pendant les vacances. Un échange de garde
+ * accepté ({@link CustodyOverride}) passe avant tout le reste : période EXCHANGE.
  */
 public class CustodyCalculator {
 
@@ -51,10 +52,17 @@ public class CustodyCalculator {
 
     private final CustodySchedule schedule;
     private final List<Holiday> holidays;
+    private final List<CustodyOverride> overrides;
 
     public CustodyCalculator(CustodySchedule schedule, List<Holiday> holidays) {
+        this(schedule, holidays, List.of());
+    }
+
+    /** {@code overrides} : les échanges acceptés, qui passent avant les vacances et le rythme. */
+    public CustodyCalculator(CustodySchedule schedule, List<Holiday> holidays, List<CustodyOverride> overrides) {
         this.schedule = schedule;
         this.holidays = holidays;
+        this.overrides = overrides;
     }
 
     /** Les nuits de {@code from} à {@code to} inclus. */
@@ -103,6 +111,13 @@ public class CustodyCalculator {
     }
 
     private Night night(LocalDate date) {
+        for (CustodyOverride override : overrides) {
+            if (override.contains(date)) {
+                String holiday = holidays.stream().filter(h -> h.contains(date)).map(Holiday::name)
+                        .findFirst().orElse(null);
+                return new Night(override.parent(), CustodyPeriod.EXCHANGE, holiday);
+            }
+        }
         for (Holiday holiday : holidays) {
             if (holiday.contains(date)) {
                 FamilyRole parent = holidayParent(holiday, date);

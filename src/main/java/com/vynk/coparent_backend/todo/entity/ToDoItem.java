@@ -42,6 +42,10 @@ public class ToDoItem {
     @Column(nullable = false)
     private ToDoKind kind;
 
+    /** L'objet concerné (ex. l'échange de garde) : l'app ouvre l'écran qui permet d'y répondre. */
+    @Column(columnDefinition = "binary(16)")
+    private UUID targetId;
+
     @Column(nullable = false, length = 150)
     private String subject;
 
@@ -63,8 +67,13 @@ public class ToDoItem {
     private Instant resolvedAt;
 
     public ToDoItem(Family family, ToDoKind kind, String subject, User requestedBy, User assignee) {
+        this(family, kind, null, subject, requestedBy, assignee);
+    }
+
+    public ToDoItem(Family family, ToDoKind kind, UUID targetId, String subject, User requestedBy, User assignee) {
         this.family = family;
         this.kind = kind;
+        this.targetId = targetId;
         this.subject = subject;
         this.requestedBy = requestedBy;
         this.assignee = assignee;
@@ -73,5 +82,10 @@ public class ToDoItem {
     /** « Relancer » : la date de la dernière relance, une par jour au maximum (vérifié par le service). */
     public void nudge(Instant now) {
         this.lastNudgedAt = now;
+    }
+
+    /** Réponse donnée : la demande quitte « À traiter ». */
+    public void resolve(Instant now) {
+        this.resolvedAt = now;
     }
 }

@@ -1,6 +1,8 @@
 package com.vynk.coparent_backend.family.service;
 
 import com.vynk.coparent_backend.common.ApiException;
+import com.vynk.coparent_backend.exchange.entity.ExchangeStatus;
+import com.vynk.coparent_backend.exchange.repository.CustodyExchangeRepository;
 import com.vynk.coparent_backend.family.dto.CustodyResponse;
 import com.vynk.coparent_backend.family.dto.HandoverResponse;
 import com.vynk.coparent_backend.family.entity.CustodySchedule;
@@ -16,12 +18,14 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Garde calculée pour l'app (accueil, calendrier). S'appuie sur le rythme ACTIVE, sinon sur la dernière
- * proposition (mode solo ou validation en attente). Le calcul lui-même est dans {@link CustodyCalculator}.
+ * proposition (mode solo ou validation en attente), et sur les échanges de garde acceptés. Le calcul lui-même est
+ * dans {@link CustodyCalculator}.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,6 +38,7 @@ public class CustodyService {
     private final FamilyAccess familyAccess;
     private final CustodyScheduleRepository scheduleRepository;
     private final SchoolHolidays schoolHolidays;
+    private final CustodyExchangeRepository exchangeRepository;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -59,6 +64,12 @@ public class CustodyService {
         return currentSchedule(familyId).flatMap(schedule -> calculator(me, schedule).nextHandover(now()));
     }
 
+    /** Calcul de la garde en cours (échanges acceptés compris), ou vide sans rythme. L'accès est vérifié par l'appelant. */
+    @Transactional(readOnly = true)
+    public Optional<CustodyCalculator> currentCalculator(FamilyMember me) {
+        return currentSchedule(me.getFamily().getId()).map(schedule -> calculator(me, schedule));
+    }
+
     /** Le rythme ACTIVE, sinon la dernière proposition. */
     private Optional<CustodySchedule> currentSchedule(UUID familyId) {
         return scheduleRepository
@@ -68,7 +79,12 @@ public class CustodyService {
     }
 
     private CustodyCalculator calculator(FamilyMember me, CustodySchedule schedule) {
-        return new CustodyCalculator(schedule, schoolHolidays.forZone(me.getFamily().getVacationZone()));
+        List<CustodyOverride> overrides = exchangeRepository
+                .findByFamilyIdAndStatusInOrderByTakeFromAsc(me.getFamily().getId(), List.of(ExchangeStatus.ACCEPTED))
+                .stream()
+                .flatMap(exchange -> exchange.overrides().stream())
+                .toList();
+        return new CustodyCalculator(schedule, schoolHolidays.forZone(me.getFamily().getVacationZone()), overrides);
     }
 
     private LocalDateTime now() {

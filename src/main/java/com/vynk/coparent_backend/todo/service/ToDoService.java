@@ -81,6 +81,7 @@ public class ToDoService {
         return new ToDoItemResponse(
                 item.getId(),
                 item.getKind(),
+                item.getTargetId(),
                 item.getSubject(),
                 requestedBy == null ? null : requestedBy.getFirstName(),
                 item.getAssignee().getFirstName(),
