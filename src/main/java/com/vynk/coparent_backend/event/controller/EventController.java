@@ -1,8 +1,9 @@
 package com.vynk.coparent_backend.event.controller;
 
+import com.vynk.coparent_backend.event.dto.EventChangeResponse;
 import com.vynk.coparent_backend.event.dto.EventRequest;
 import com.vynk.coparent_backend.event.dto.EventResponse;
-import com.vynk.coparent_backend.event.dto.EventScope;
+import com.vynk.coparent_backend.event.entity.EventScope;
 import com.vynk.coparent_backend.event.dto.RepeatPreviewDate;
 import com.vynk.coparent_backend.event.dto.RepeatPreviewRequest;
 import com.vynk.coparent_backend.event.service.EventService;
@@ -62,6 +63,13 @@ public class EventController {
                              @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                              LocalDate date) {
         return eventService.get(familyId, userId(jwt), eventId, date);
+    }
+
+    /** Historique de l'événement et de sa série, le plus récent d'abord. */
+    @GetMapping("/{eventId}/history")
+    public List<EventChangeResponse> history(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                             @PathVariable UUID eventId) {
+        return eventService.history(familyId, userId(jwt), eventId);
     }
 
     @PutMapping("/{eventId}")

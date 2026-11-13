@@ -26,6 +26,7 @@ import org.hibernate.annotations.UuidGenerator;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -50,6 +51,13 @@ public class Event {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "family_id", nullable = false, columnDefinition = "binary(16)")
     private Family family;
+
+    /**
+     * Regroupe une série et ce qui en est détaché (séance modifiée seule, suite d'une série modifiée), pour
+     * l'historique.
+     */
+    @Column(name = "series_id", nullable = false, columnDefinition = "binary(16)")
+    private UUID seriesId;
 
     /** Null si le compte a été supprimé. */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -93,6 +101,12 @@ public class Event {
     @Embedded
     private EventRepeat repeat;
 
+    /** Répétition personnalisée par semaine : les jours choisis, avec leur horaire s'il diffère. */
+    @ElementCollection
+    @CollectionTable(name = "event_repeat_days",
+            joinColumns = @JoinColumn(name = "event_id", columnDefinition = "binary(16)"))
+    private Set<EventRepeatDay> repeatDays = new HashSet<>();
+
     /** Séances retirées de la série (supprimées seules, ou remplacées par un événement modifié). */
     @ElementCollection
     @CollectionTable(name = "event_exceptions",
@@ -107,9 +121,11 @@ public class Event {
     @Column(nullable = false)
     private Instant updatedAt;
 
-    public Event(Family family, User author) {
+    /** {@code seriesId} : celui de la série d'origine, ou null pour un nouvel événement. */
+    public Event(Family family, User author, UUID seriesId) {
         this.family = family;
         this.author = author;
+        this.seriesId = seriesId == null ? UUID.randomUUID() : seriesId;
     }
 
     /** Remplace tout le contenu de l'événement (création ou modification). */
@@ -134,8 +150,12 @@ public class Event {
     }
 
     /** Règle de répétition (null : événement unique). */
-    public void repeat(EventRepeat repeat, Instant now) {
+    public void repeat(EventRepeat repeat, Collection<EventRepeatDay> days, Instant now) {
         this.repeat = repeat;
+        this.repeatDays.clear();
+        if (repeat != null) {
+            this.repeatDays.addAll(days);
+        }
         this.updatedAt = now;
     }
 

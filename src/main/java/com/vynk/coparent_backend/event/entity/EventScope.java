@@ -1,4 +1,4 @@
-package com.vynk.coparent_backend.event.dto;
+package com.vynk.coparent_backend.event.entity;
 
 /** Séances d'une série concernées par une modification ou une suppression. */
 public enum EventScope {

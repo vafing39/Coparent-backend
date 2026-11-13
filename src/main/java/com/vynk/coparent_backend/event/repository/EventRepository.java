@@ -29,7 +29,7 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
                             @Param("shared") EventVisibility shared);
 
     /** Séries visibles commencées avant {@code to} et pas arrêtées avant {@code from}. */
-    @EntityGraph(attributePaths = {"children", "author", "skippedDates"})
+    @EntityGraph(attributePaths = {"children", "author", "skippedDates", "repeatDays"})
     @Query("""
             select distinct e from Event e
             where e.family.id = :familyId and e.repeat.frequency is not null and e.startsAt < :to
@@ -40,6 +40,6 @@ public interface EventRepository extends JpaRepository<Event, UUID> {
                                   @Param("to") Instant to, @Param("from") LocalDate from,
                                   @Param("shared") EventVisibility shared);
 
-    @EntityGraph(attributePaths = {"children", "author", "skippedDates"})
+    @EntityGraph(attributePaths = {"children", "author", "skippedDates", "repeatDays"})
     Optional<Event> findByIdAndFamilyId(UUID id, UUID familyId);
 }

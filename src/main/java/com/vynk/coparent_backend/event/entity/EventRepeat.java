@@ -24,6 +24,19 @@ public class EventRepeat {
     @Column(name = "repeat_frequency")
     private RepeatFrequency frequency;
 
+    /** CUSTOM : tous les {@code interval} {@code unit} (1 à 12). */
+    @Column(name = "repeat_interval", columnDefinition = "tinyint")
+    private Integer interval;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "repeat_unit")
+    private RepeatUnit unit;
+
+    /** CUSTOM par mois : le même quantième ou le même rang du jour que la première séance. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "repeat_month_mode")
+    private RepeatMonthMode monthMode;
+
     /** Seulement quand les enfants sont chez ce parent ; null : peu importe. */
     @Enumerated(EnumType.STRING)
     @Column(name = "repeat_only_with")
@@ -42,9 +55,12 @@ public class EventRepeat {
     @Column(name = "repeat_until")
     private LocalDate until;
 
-    public EventRepeat(RepeatFrequency frequency, FamilyRole onlyWith, boolean skipHolidays, RepeatEnd end,
-                       Integer count, LocalDate until) {
+    public EventRepeat(RepeatFrequency frequency, Integer interval, RepeatUnit unit, RepeatMonthMode monthMode,
+                       FamilyRole onlyWith, boolean skipHolidays, RepeatEnd end, Integer count, LocalDate until) {
         this.frequency = frequency;
+        this.interval = interval;
+        this.unit = unit;
+        this.monthMode = monthMode;
         this.onlyWith = onlyWith;
         this.skipHolidays = skipHolidays;
         this.end = end;
@@ -59,6 +75,6 @@ public class EventRepeat {
     /** La même règle, arrêtée au plus tard le {@code lastDay}. */
     public EventRepeat endingOn(LocalDate lastDay) {
         LocalDate bound = until == null || lastDay.isBefore(until) ? lastDay : until;
-        return new EventRepeat(frequency, onlyWith, skipsHolidays(), end, count, bound);
+        return new EventRepeat(frequency, interval, unit, monthMode, onlyWith, skipsHolidays(), end, count, bound);
     }
 }
