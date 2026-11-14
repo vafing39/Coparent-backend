@@ -24,7 +24,7 @@ import java.util.UUID;
  * Deletes the personal data of deleted accounts once their 30 days are over (spec §1). The user row stays,
  * anonymised, so messages (whose hash chain uses the sender's id), events and history keep their author for the
  * other parent; its name becomes {@link #DELETED_NAME}. A family left without any active parent is deleted,
- * with its receipt files.
+ * with its receipt and document files.
  */
 @Slf4j
 @Component
@@ -75,7 +75,10 @@ public class AccountPurgeJob {
                 .anyMatch(member -> member.getUser().isActive());
         if (!someoneLeft) {
             familyRepository.deleteFamily(familyId);
-            AfterCommit.run(() -> storage.deleteFolder("receipts/" + familyId));
+            AfterCommit.run(() -> {
+                storage.deleteFolder("receipts/" + familyId);
+                storage.deleteFolder("documents/" + familyId);
+            });
         }
     }
 }

@@ -1,4 +1,4 @@
-package com.vynk.coparent_backend.expense.service;
+package com.vynk.coparent_backend.common.storage;
 
 import com.drew.imaging.ImageMetadataReader;
 import com.drew.metadata.Metadata;
@@ -21,9 +21,9 @@ import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-public class ReceiptImagesTest {
+public class PhotoCleanerTest {
 
-    private final ReceiptImages images = new ReceiptImages();
+    private final PhotoCleaner images = new PhotoCleaner();
 
     @Test
     void gpsAndExifAreRemovedAndOrientationIsApplied() throws Exception {
@@ -31,7 +31,7 @@ public class ReceiptImagesTest {
         byte[] input = withExif(jpeg(halves(40, 20)), 6);
         Metadata before = ImageMetadataReader.readMetadata(new ByteArrayInputStream(input));
         assertThat(before.getFirstDirectoryOfType(GpsDirectory.class)).isNotNull();
-        assertThat(ReceiptImages.orientation(input)).isEqualTo(6);
+        assertThat(PhotoCleaner.orientation(input)).isEqualTo(6);
 
         byte[] output = images.clean(input);
 
@@ -56,7 +56,7 @@ public class ReceiptImagesTest {
             source.setRGB(i % 3, i / 3, colors[i]);
         }
 
-        BufferedImage out = ReceiptImages.orient(source, orientation);
+        BufferedImage out = PhotoCleaner.orient(source, orientation);
 
         int w = 3;
         int h = 2;
@@ -90,7 +90,7 @@ public class ReceiptImagesTest {
 
         byte[] output = images.clean(png.toByteArray());
 
-        assertThat(ReceiptImages.isJpeg(output)).isTrue();
+        assertThat(PhotoCleaner.isJpeg(output)).isTrue();
         BufferedImage image = ImageIO.read(new ByteArrayInputStream(output));
         assertThat(image.getWidth()).isEqualTo(2000);
         assertThat(image.getHeight()).isEqualTo(667);
@@ -103,7 +103,7 @@ public class ReceiptImagesTest {
     void anythingButAJpegOrPngIsRefused() throws Exception {
         assertThatThrownBy(() -> images.clean("%PDF-1.7 facture".getBytes(StandardCharsets.UTF_8)))
                 .isInstanceOf(ApiException.class)
-                .hasMessage(ReceiptImages.INVALID);
+                .hasMessage(PhotoCleaner.INVALID);
         assertThatThrownBy(() -> images.clean(new byte[0])).isInstanceOf(ApiException.class);
         // un faux JPEG (bonne signature, contenu illisible)
         assertThatThrownBy(() -> images.clean(new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1, 2, 3}))

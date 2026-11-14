@@ -21,6 +21,7 @@ public record DataExport(
         List<BagItem> bagItems,
         List<Expense> expenses,
         List<Settlement> settlements,
+        List<Document> documents,
         List<ToDo> openRequests
 ) {
 
@@ -48,6 +49,15 @@ public record DataExport(
                           String payerRole, LocalDate paidOn, int payerSharePercent, String status,
                           String contestReason, String contestNote, boolean hasReceipt, String authorFirstName,
                           Instant createdAt) {
+    }
+
+    /** Un document partagé, sans son fichier, avec son historique (ouvertures, suppression). */
+    public record Document(UUID id, String title, String category, String child, String contentType, int sizeBytes,
+                           String authorFirstName, Instant createdAt, Instant deletedAt,
+                           List<DocumentEvent> history) {
+    }
+
+    public record DocumentEvent(String kind, String firstName, Instant at) {
     }
 
     public record Settlement(UUID id, String payerRole, int amountCents, String status, Instant declaredAt,

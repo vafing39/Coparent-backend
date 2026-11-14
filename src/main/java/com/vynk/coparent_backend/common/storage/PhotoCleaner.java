@@ -1,4 +1,4 @@
-package com.vynk.coparent_backend.expense.service;
+package com.vynk.coparent_backend.common.storage;
 
 import com.drew.imaging.ImageMetadataReader;
 import com.drew.imaging.ImageProcessingException;
@@ -27,26 +27,22 @@ import java.io.UncheckedIOException;
 import java.util.Iterator;
 
 /**
- * Nettoie un justificatif photo avant de le stocker : JPEG ou PNG seulement (reconnus par leur contenu), orientation
+ * Nettoie une photo envoyée (justificatif de dépense, document) avant de la stocker : JPEG ou PNG seulement (reconnus par leur contenu), orientation
  * EXIF appliquée, 2000 px au plus sur le grand côté, puis réencodage en JPEG. Le fichier produit ne contient aucune
  * métadonnée (position GPS, appareil, date), quoi que l'app ait envoyé.
  */
 @Component
-public class ReceiptImages {
+public class PhotoCleaner {
 
-    static final int MAX_BYTES = 10 * 1024 * 1024;
     static final int MAX_SIDE = 2000;
-    /** Au-delà, l'image n'est pas décodée (protection contre les images démesurées). */
+    /** La taille du fichier est vérifiée par l'appelant. Au-delà, l'image n'est pas décodée (protection contre les images démesurées). */
     static final long MAX_PIXELS = 60_000_000L;
-    static final String INVALID = "Le justificatif doit être une photo (JPEG ou PNG).";
+    public static final String INVALID = "Le fichier doit être une photo (JPEG ou PNG).";
     private static final float QUALITY = 0.85f;
 
     public byte[] clean(byte[] input) {
         if (input == null || input.length == 0) {
             throw ApiException.badRequest(INVALID);
-        }
-        if (input.length > MAX_BYTES) {
-            throw ApiException.badRequest("Le justificatif ne peut pas dépasser 10 Mo.");
         }
         boolean jpeg = isJpeg(input);
         if (!jpeg && !isPng(input)) {
@@ -59,11 +55,11 @@ public class ReceiptImages {
         return encodeJpeg(flattenAndResize(image));
     }
 
-    static boolean isJpeg(byte[] b) {
+    public static boolean isJpeg(byte[] b) {
         return b.length > 3 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xFF) == 0xD8 && (b[2] & 0xFF) == 0xFF;
     }
 
-    static boolean isPng(byte[] b) {
+    public static boolean isPng(byte[] b) {
         return b.length > 8 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G';
     }
 

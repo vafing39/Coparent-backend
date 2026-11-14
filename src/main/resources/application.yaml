@@ -12,8 +12,8 @@ spring:
     password: ${MAIL_PASSWORD:}
   servlet:
     multipart:
-      max-file-size: 10MB  # justificatifs photo
-      max-request-size: 11MB
+      max-file-size: 20MB  # documents ; les justificatifs photo sont limités à 10 Mo par le service
+      max-request-size: 21MB
   jpa:
     open-in-view: false
     hibernate:
@@ -35,8 +35,8 @@ app:
     public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
   links:  # lien d'invitation ouvert dans l'app (Universal Links / App Links) ; valeurs réelles à fournir
     app-scheme: coparent
-    ios-app-ids: ${IOS_APP_IDS:TEAMID.org.reactjs.native.example.AwesomeProject}  # <Team ID>.<bundle id>, séparés par des virgules
-    android-package: ${ANDROID_PACKAGE:com.awesomeproject}
+    ios-app-ids: ${IOS_APP_IDS:TEAMID.com.lyen.app}  # <Team ID>.<bundle id>, séparés par des virgules
+    android-package: ${ANDROID_PACKAGE:com.lyen.app}
     android-sha256-fingerprints: ${ANDROID_SHA256_FINGERPRINTS:}  # empreintes des certificats de signature
     app-store-url: ${APP_STORE_URL:}
     play-store-url: ${PLAY_STORE_URL:}

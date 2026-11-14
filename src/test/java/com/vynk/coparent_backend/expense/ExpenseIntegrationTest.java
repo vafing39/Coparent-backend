@@ -3,7 +3,7 @@ package com.vynk.coparent_backend.expense;
 import com.jayway.jsonpath.JsonPath;
 import com.vynk.coparent_backend.auth.email.EmailSender;
 import com.vynk.coparent_backend.auth.service.RateLimiter;
-import com.vynk.coparent_backend.expense.service.ReceiptImagesTest;
+import com.vynk.coparent_backend.common.storage.PhotoCleanerTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -297,7 +297,7 @@ class ExpenseIntegrationTest {
         call(julien, HttpMethod.GET, path + "/receipt", null).andExpect(status().isNotFound());
 
         // Une photo de téléphone, avec position GPS : stockée sans aucune métadonnée
-        byte[] photo = ReceiptImagesTest.withExif(ReceiptImagesTest.jpeg(new BufferedImage(60, 40,
+        byte[] photo = PhotoCleanerTest.withExif(PhotoCleanerTest.jpeg(new BufferedImage(60, 40,
                 BufferedImage.TYPE_INT_RGB)), 6);
         upload(camille, path, photo)
                 .andExpect(status().isOk())
@@ -321,7 +321,7 @@ class ExpenseIntegrationTest {
         call(julien, HttpMethod.DELETE, path + "/receipt", null).andExpect(status().isConflict());
 
         // Remplacée : l'ancien fichier disparaît
-        upload(camille, path, ReceiptImagesTest.jpeg(new BufferedImage(30, 30, BufferedImage.TYPE_INT_RGB)))
+        upload(camille, path, PhotoCleanerTest.jpeg(new BufferedImage(30, 30, BufferedImage.TYPE_INT_RGB)))
                 .andExpect(status().isOk());
         assertThat(receiptFiles(family)).hasSize(1);
         assertThat(Files.readAllBytes(receiptFiles(family).getFirst())).isNotEqualTo(stored);
@@ -342,7 +342,7 @@ class ExpenseIntegrationTest {
         Account stranger = verifiedUser("Inconnu");
         Family family = family(camille);
         join(camille, julien, family);
-        byte[] photo = ReceiptImagesTest.jpeg(new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB));
+        byte[] photo = PhotoCleanerTest.jpeg(new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB));
 
         // Contestée pour un justificatif manquant : l'ajouter la remet en attente, chez l'autre parent
         String contested = JsonPath.read(call(julien, HttpMethod.POST, family.expenses(),

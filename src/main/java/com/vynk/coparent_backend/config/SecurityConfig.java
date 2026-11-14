@@ -44,6 +44,8 @@ public class SecurityConfig {
                                 "/.well-known/assetlinks.json", "/invitation").permitAll()
                         // WebSocket de la messagerie : le jeton est vérifié au CONNECT STOMP (StompAuthInterceptor).
                         .requestMatchers("/ws").permitAll()
+                        // Fichier d'un document : le lien temporaire signé fait office d'autorisation (DocumentLinks).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/document-files/*").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
         return http.build();

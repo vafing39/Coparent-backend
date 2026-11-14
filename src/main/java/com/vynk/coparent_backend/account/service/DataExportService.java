@@ -10,6 +10,8 @@ import com.vynk.coparent_backend.event.entity.Event;
 import com.vynk.coparent_backend.event.entity.EventVisibility;
 import com.vynk.coparent_backend.event.repository.EventRepository;
 import com.vynk.coparent_backend.exchange.entity.ExchangeStatus;
+import com.vynk.coparent_backend.document.repository.DocumentEventRepository;
+import com.vynk.coparent_backend.document.repository.DocumentRepository;
 import com.vynk.coparent_backend.expense.entity.ExpenseStatus;
 import com.vynk.coparent_backend.expense.entity.SettlementStatus;
 import com.vynk.coparent_backend.expense.repository.ExpenseRepository;
@@ -58,6 +60,8 @@ public class DataExportService {
     private final BagItemRepository bagItemRepository;
     private final ExpenseRepository expenseRepository;
     private final SettlementRepository settlementRepository;
+    private final DocumentRepository documentRepository;
+    private final DocumentEventRepository documentEventRepository;
     private final ToDoItemRepository toDoItemRepository;
     private final EmailSender emailSender;
     private final RateLimiter rateLimiter;
@@ -82,12 +86,12 @@ public class DataExportService {
                 user.getEmailVerifiedAt(), user.getCreatedAt());
         Optional<FamilyMember> membership = memberRepository.findFirstByUserId(user.getId());
         if (membership.isEmpty()) {
-            return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+            return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
         }
         UUID familyId = membership.get().getFamily().getId();
         return new DataExport(now, account, familyService.getMine(user.getId()),
                 events(familyId, user.getId()), conversations(familyId), exchanges(familyId), bagItems(familyId),
-                expenses(familyId), settlements(familyId), openRequests(familyId));
+                expenses(familyId), settlements(familyId), documents(familyId), openRequests(familyId));
     }
 
     private List<DataExport.Event> events(UUID familyId, UUID userId) {
@@ -140,6 +144,20 @@ public class DataExportService {
                         e.getPaidOn(), e.getPayerSharePercent(), e.getStatus().name(),
                         e.getContestReason() == null ? null : e.getContestReason().name(), e.getContestNote(),
                         e.hasReceipt(), firstName(e.getCreatedBy()), e.getCreatedAt()))
+                .toList();
+    }
+
+    private List<DataExport.Document> documents(UUID familyId) {
+        Map<UUID, List<DataExport.DocumentEvent>> history =
+                documentEventRepository.findByDocumentFamilyIdOrderByCreatedAtDesc(familyId).stream()
+                        .collect(Collectors.groupingBy(e -> e.getDocument().getId(),
+                                Collectors.mapping(e -> new DataExport.DocumentEvent(e.getKind().name(),
+                                        firstName(e.getUser()), e.getCreatedAt()), Collectors.toList())));
+        return documentRepository.findByFamilyIdOrderByCreatedAtDesc(familyId).stream()
+                .map(d -> new DataExport.Document(d.getId(), d.getTitle(), d.getCategory().name(),
+                        d.getChild() == null ? null : d.getChild().getFirstName(), d.getContentType(),
+                        d.getSizeBytes(), firstName(d.getCreatedBy()), d.getCreatedAt(), d.getDeletedAt(),
+                        history.getOrDefault(d.getId(), List.of())))
                 .toList();
     }
 

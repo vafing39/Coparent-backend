@@ -3,6 +3,7 @@ package com.vynk.coparent_backend.expense.service;
 import com.vynk.coparent_backend.common.ApiException;
 import com.vynk.coparent_backend.common.storage.AfterCommit;
 import com.vynk.coparent_backend.common.storage.FileStorage;
+import com.vynk.coparent_backend.common.storage.PhotoCleaner;
 import com.vynk.coparent_backend.expense.dto.ContestRequest;
 import com.vynk.coparent_backend.expense.dto.ExpenseRequest;
 import com.vynk.coparent_backend.expense.dto.ExpenseResponse;
@@ -49,6 +50,8 @@ public class ExpenseService {
     /** Part du payeur : 50/50, 60/40, 70/30, 100 %, ou l'inverse. */
     static final Set<Integer> PAYER_SHARES = Set.of(0, 30, 40, 50, 60, 70, 100);
     static final String NOT_FOUND = "Dépense introuvable.";
+    static final int RECEIPT_MAX_BYTES = 10 * 1024 * 1024;
+    static final String RECEIPT_INVALID = "Le justificatif doit être une photo (JPEG ou PNG).";
     static final String NO_RECEIPT = "Cette dépense n'a pas de justificatif.";
     static final String RECEIPT_AUTHOR_ONLY = "Seul le parent qui a ajouté la dépense peut changer son justificatif.";
     private static final List<ExpenseStatus> VISIBLE =
@@ -60,7 +63,7 @@ public class ExpenseService {
     private final ChildRepository childRepository;
     private final ExpenseRepository expenseRepository;
     private final ToDoItemRepository toDoRepository;
-    private final ReceiptImages receiptImages;
+    private final PhotoCleaner photoCleaner;
     private final FileStorage storage;
     private final Clock clock;
 
@@ -155,7 +158,7 @@ public class ExpenseService {
 
     /**
      * Ajoute ou remplace le justificatif photo (l'auteur, dépense en attente ou contestée). L'image est nettoyée
-     * ({@link ReceiptImages}) avant d'être stockée ; une dépense contestée repasse en attente, comme une correction.
+     * ({@link PhotoCleaner}, 10 Mo au plus) avant d'être stockée ; une dépense contestée repasse en attente, comme une correction.
      */
     @Transactional
     public ExpenseResponse putReceipt(UUID familyId, UUID userId, UUID expenseId, byte[] image) {
@@ -163,7 +166,13 @@ public class ExpenseService {
         lockFamily(familyId);
         Expense expense = find(familyId, expenseId);
         requireAuthor(expense, me, RECEIPT_AUTHOR_ONLY);
-        byte[] cleaned = receiptImages.clean(image);
+        if (image == null || !(PhotoCleaner.isJpeg(image) || PhotoCleaner.isPng(image))) {
+            throw ApiException.badRequest(RECEIPT_INVALID);
+        }
+        if (image.length > RECEIPT_MAX_BYTES) {
+            throw ApiException.badRequest("Le justificatif ne peut pas dépasser 10 Mo.");
+        }
+        byte[] cleaned = photoCleaner.clean(image);
         String key = "receipts/" + familyId + "/" + expenseId + "-" + UUID.randomUUID() + ".jpg";
         storage.put(key, cleaned);
         try {
