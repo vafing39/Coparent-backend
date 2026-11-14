@@ -22,6 +22,10 @@ import com.vynk.coparent_backend.family.entity.FamilyMember;
 import com.vynk.coparent_backend.family.repository.ChildProfileRepository;
 import com.vynk.coparent_backend.family.repository.FamilyMemberRepository;
 import com.vynk.coparent_backend.family.service.FamilyService;
+import com.vynk.coparent_backend.feed.entity.Post;
+import com.vynk.coparent_backend.feed.repository.PostCommentRepository;
+import com.vynk.coparent_backend.feed.repository.PostReactionRepository;
+import com.vynk.coparent_backend.feed.repository.PostRepository;
 import com.vynk.coparent_backend.message.entity.Message;
 import com.vynk.coparent_backend.message.repository.ConversationRepository;
 import com.vynk.coparent_backend.message.repository.MessageRepository;
@@ -63,6 +67,9 @@ public class DataExportService {
     private final SettlementRepository settlementRepository;
     private final DocumentRepository documentRepository;
     private final ChildProfileRepository childProfileRepository;
+    private final PostRepository postRepository;
+    private final PostReactionRepository postReactionRepository;
+    private final PostCommentRepository postCommentRepository;
     private final DocumentEventRepository documentEventRepository;
     private final ToDoItemRepository toDoItemRepository;
     private final EmailSender emailSender;
@@ -89,12 +96,12 @@ public class DataExportService {
         Optional<FamilyMember> membership = memberRepository.findFirstByUserId(user.getId());
         if (membership.isEmpty()) {
             return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                    List.of(), List.of(), List.of());
+                    List.of(), List.of(), List.of(), List.of());
         }
         UUID familyId = membership.get().getFamily().getId();
         return new DataExport(now, account, familyService.getMine(user.getId()), childProfiles(familyId),
                 events(familyId, user.getId()), conversations(familyId), exchanges(familyId), bagItems(familyId),
-                expenses(familyId), settlements(familyId), documents(familyId), openRequests(familyId));
+                expenses(familyId), settlements(familyId), documents(familyId), posts(familyId), openRequests(familyId));
     }
 
     private List<DataExport.Event> events(UUID familyId, UUID userId) {
@@ -158,6 +165,25 @@ public class DataExportService {
                                 .map(c -> new DataExport.ChildContact(c.getName(), c.getRole(), c.getPhone()))
                                 .toList(),
                         firstName(p.getUpdatedBy()), p.getUpdatedAt()))
+                .toList();
+    }
+
+    private List<DataExport.Post> posts(UUID familyId) {
+        List<Post> posts = postRepository.findByFamilyIdOrderByCreatedAtDesc(familyId);
+        Map<UUID, List<String>> reactions = postReactionRepository
+                .findByPostIdIn(posts.stream().map(Post::getId).toList()).stream()
+                .collect(Collectors.groupingBy(r -> r.getPostId(),
+                        Collectors.mapping(r -> r.getKind().name() + " " + r.getRole().name(), Collectors.toList())));
+        Map<UUID, List<DataExport.PostComment>> comments =
+                postCommentRepository.findByPostFamilyIdOrderByCreatedAtAsc(familyId).stream()
+                        .collect(Collectors.groupingBy(c -> c.getPost().getId(),
+                                Collectors.mapping(c -> new DataExport.PostComment(firstName(c.getUser()), c.getBody(),
+                                        c.getCreatedAt()), Collectors.toList())));
+        return posts.stream()
+                .map(p -> new DataExport.Post(p.getId(), firstName(p.getCreatedBy()), p.getBody(), p.isFirstTime(),
+                        p.getChildren().stream().map(Child::getFirstName).toList(), p.getPhotos().size(),
+                        reactions.getOrDefault(p.getId(), List.of()), p.isHidden(), p.getCreatedAt(),
+                        comments.getOrDefault(p.getId(), List.of())))
                 .toList();
     }
 

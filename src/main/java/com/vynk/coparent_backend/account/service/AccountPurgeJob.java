@@ -78,6 +78,7 @@ public class AccountPurgeJob {
             AfterCommit.run(() -> {
                 storage.deleteFolder("receipts/" + familyId);
                 storage.deleteFolder("documents/" + familyId);
+                storage.deleteFolder("posts/" + familyId);
             });
         }
     }

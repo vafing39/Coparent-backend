@@ -23,6 +23,7 @@ public record DataExport(
         List<Expense> expenses,
         List<Settlement> settlements,
         List<Document> documents,
+        List<Post> posts,
         List<ToDo> openRequests
 ) {
 
@@ -65,6 +66,15 @@ public record DataExport(
     public record Document(UUID id, String title, String category, String child, String contentType, int sizeBytes,
                            String authorFirstName, Instant createdAt, Instant deletedAt,
                            List<DocumentEvent> history) {
+    }
+
+    /** Une publication du fil (les photos ne sont pas jointes, seulement leur nombre). */
+    public record Post(UUID id, String authorFirstName, String body, boolean firstTime, List<String> children,
+                       int photoCount, List<String> reactions, boolean hidden, Instant createdAt,
+                       List<PostComment> comments) {
+    }
+
+    public record PostComment(String firstName, String body, Instant createdAt) {
     }
 
     public record DocumentEvent(String kind, String firstName, Instant at) {

@@ -12,8 +12,8 @@ spring:
     password: ${MAIL_PASSWORD:}
   servlet:
     multipart:
-      max-file-size: 20MB  # documents ; les justificatifs photo sont limités à 10 Mo par le service
-      max-request-size: 21MB
+      max-file-size: 20MB  # documents ; justificatifs et photos du fil : 10 Mo chacun, vérifié par le service
+      max-request-size: 61MB  # publication du fil : 6 photos
   jpa:
     open-in-view: false
     hibernate:
