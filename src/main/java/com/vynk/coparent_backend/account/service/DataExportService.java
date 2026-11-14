@@ -19,6 +19,7 @@ import com.vynk.coparent_backend.expense.repository.SettlementRepository;
 import com.vynk.coparent_backend.exchange.repository.CustodyExchangeRepository;
 import com.vynk.coparent_backend.family.entity.Child;
 import com.vynk.coparent_backend.family.entity.FamilyMember;
+import com.vynk.coparent_backend.family.repository.ChildProfileRepository;
 import com.vynk.coparent_backend.family.repository.FamilyMemberRepository;
 import com.vynk.coparent_backend.family.service.FamilyService;
 import com.vynk.coparent_backend.message.entity.Message;
@@ -61,6 +62,7 @@ public class DataExportService {
     private final ExpenseRepository expenseRepository;
     private final SettlementRepository settlementRepository;
     private final DocumentRepository documentRepository;
+    private final ChildProfileRepository childProfileRepository;
     private final DocumentEventRepository documentEventRepository;
     private final ToDoItemRepository toDoItemRepository;
     private final EmailSender emailSender;
@@ -86,10 +88,11 @@ public class DataExportService {
                 user.getEmailVerifiedAt(), user.getCreatedAt());
         Optional<FamilyMember> membership = memberRepository.findFirstByUserId(user.getId());
         if (membership.isEmpty()) {
-            return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+            return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                    List.of(), List.of(), List.of());
         }
         UUID familyId = membership.get().getFamily().getId();
-        return new DataExport(now, account, familyService.getMine(user.getId()),
+        return new DataExport(now, account, familyService.getMine(user.getId()), childProfiles(familyId),
                 events(familyId, user.getId()), conversations(familyId), exchanges(familyId), bagItems(familyId),
                 expenses(familyId), settlements(familyId), documents(familyId), openRequests(familyId));
     }
@@ -144,6 +147,17 @@ public class DataExportService {
                         e.getPaidOn(), e.getPayerSharePercent(), e.getStatus().name(),
                         e.getContestReason() == null ? null : e.getContestReason().name(), e.getContestNote(),
                         e.hasReceipt(), firstName(e.getCreatedBy()), e.getCreatedAt()))
+                .toList();
+    }
+
+    private List<DataExport.ChildProfile> childProfiles(UUID familyId) {
+        return childProfileRepository.findByChildFamilyId(familyId).stream()
+                .map(p -> new DataExport.ChildProfile(p.getChild().getFirstName(), p.getSchool(), p.getGrade(),
+                        p.getTeacher(), p.getAllergies(), p.getDoctor(), p.getDoctorPhone(),
+                        p.getContacts().stream()
+                                .map(c -> new DataExport.ChildContact(c.getName(), c.getRole(), c.getPhone()))
+                                .toList(),
+                        firstName(p.getUpdatedBy()), p.getUpdatedAt()))
                 .toList();
     }
 

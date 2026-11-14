@@ -1,5 +1,7 @@
 package com.vynk.coparent_backend.family.controller;
 
+import com.vynk.coparent_backend.family.dto.ChildProfileRequest;
+import com.vynk.coparent_backend.family.dto.ChildProfileResponse;
 import com.vynk.coparent_backend.family.dto.ChildRequest;
 import com.vynk.coparent_backend.family.dto.ChildResponse;
 import com.vynk.coparent_backend.family.dto.CustodyResponse;
@@ -9,6 +11,7 @@ import com.vynk.coparent_backend.family.dto.FamilyRequest;
 import com.vynk.coparent_backend.family.dto.FamilyResponse;
 import com.vynk.coparent_backend.family.dto.InvitationRequest;
 import com.vynk.coparent_backend.family.dto.InvitationResponse;
+import com.vynk.coparent_backend.family.service.ChildProfileService;
 import com.vynk.coparent_backend.family.service.ChildService;
 import com.vynk.coparent_backend.family.service.CustodyScheduleService;
 import com.vynk.coparent_backend.family.service.CustodyService;
@@ -45,6 +48,7 @@ public class FamilyController {
 
     private final FamilyService familyService;
     private final ChildService childService;
+    private final ChildProfileService childProfileService;
     private final CustodyScheduleService scheduleService;
     private final InvitationService invitationService;
     private final CustodyService custodyService;
@@ -84,6 +88,21 @@ public class FamilyController {
     public void deleteChild(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
                             @PathVariable UUID childId) {
         childService.delete(familyId, childId, userId(jwt));
+    }
+
+    /** Fiche de l'enfant (école, santé, contacts utiles) : vide tant qu'elle n'a pas été remplie. */
+    @GetMapping("/{familyId}/children/{childId}/profile")
+    public ChildProfileResponse childProfile(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                             @PathVariable UUID childId) {
+        return childProfileService.get(familyId, childId, userId(jwt));
+    }
+
+    /** Remplace toute la fiche de l'enfant, contacts compris ; par l'un ou l'autre parent. */
+    @PutMapping("/{familyId}/children/{childId}/profile")
+    public ChildProfileResponse saveChildProfile(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                                 @PathVariable UUID childId,
+                                                 @Valid @RequestBody ChildProfileRequest request) {
+        return childProfileService.save(familyId, childId, userId(jwt), request);
     }
 
     @PutMapping("/{familyId}/custody-schedule")

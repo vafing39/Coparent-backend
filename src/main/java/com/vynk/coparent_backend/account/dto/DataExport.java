@@ -15,6 +15,7 @@ public record DataExport(
         Instant exportedAt,
         Account account,
         FamilyResponse family,
+        List<ChildProfile> childProfiles,
         List<Event> events,
         List<Conversation> conversations,
         List<Exchange> exchanges,
@@ -26,6 +27,15 @@ public record DataExport(
 ) {
 
     public record Account(UUID id, String email, String firstName, Instant emailVerifiedAt, Instant createdAt) {
+    }
+
+    /** Fiche d'un enfant (école, santé, contacts utiles), telle que la voient les deux parents. */
+    public record ChildProfile(String child, String school, String grade, String teacher, String allergies,
+                               String doctor, String doctorPhone, List<ChildContact> contacts,
+                               String updatedByFirstName, Instant updatedAt) {
+    }
+
+    public record ChildContact(String name, String role, String phone) {
     }
 
     public record Event(UUID id, String title, String type, boolean allDay, Instant startsAt, Instant endsAt,
