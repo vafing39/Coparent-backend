@@ -19,6 +19,8 @@ public record DataExport(
         List<Conversation> conversations,
         List<Exchange> exchanges,
         List<BagItem> bagItems,
+        List<Expense> expenses,
+        List<Settlement> settlements,
         List<ToDo> openRequests
 ) {
 
@@ -40,6 +42,15 @@ public record DataExport(
     public record Exchange(UUID id, String requestedByFirstName, LocalDate takeFrom, LocalDate takeTo,
                            LocalDate giveFrom, LocalDate giveTo, String message, String status, Instant createdAt,
                            Instant answeredAt) {
+    }
+
+    public record Expense(UUID id, String label, int amountCents, String category, List<String> children,
+                          String payerRole, LocalDate paidOn, int payerSharePercent, String status,
+                          String contestReason, String contestNote, String authorFirstName, Instant createdAt) {
+    }
+
+    public record Settlement(UUID id, String payerRole, int amountCents, String status, Instant declaredAt,
+                             Instant answeredAt) {
     }
 
     public record BagItem(String child, String label, Instant createdAt) {

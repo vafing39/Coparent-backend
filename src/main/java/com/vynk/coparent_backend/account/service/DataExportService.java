@@ -10,6 +10,10 @@ import com.vynk.coparent_backend.event.entity.Event;
 import com.vynk.coparent_backend.event.entity.EventVisibility;
 import com.vynk.coparent_backend.event.repository.EventRepository;
 import com.vynk.coparent_backend.exchange.entity.ExchangeStatus;
+import com.vynk.coparent_backend.expense.entity.ExpenseStatus;
+import com.vynk.coparent_backend.expense.entity.SettlementStatus;
+import com.vynk.coparent_backend.expense.repository.ExpenseRepository;
+import com.vynk.coparent_backend.expense.repository.SettlementRepository;
 import com.vynk.coparent_backend.exchange.repository.CustodyExchangeRepository;
 import com.vynk.coparent_backend.family.entity.Child;
 import com.vynk.coparent_backend.family.entity.FamilyMember;
@@ -52,6 +56,8 @@ public class DataExportService {
     private final MessageRepository messageRepository;
     private final CustodyExchangeRepository exchangeRepository;
     private final BagItemRepository bagItemRepository;
+    private final ExpenseRepository expenseRepository;
+    private final SettlementRepository settlementRepository;
     private final ToDoItemRepository toDoItemRepository;
     private final EmailSender emailSender;
     private final RateLimiter rateLimiter;
@@ -76,12 +82,12 @@ public class DataExportService {
                 user.getEmailVerifiedAt(), user.getCreatedAt());
         Optional<FamilyMember> membership = memberRepository.findFirstByUserId(user.getId());
         if (membership.isEmpty()) {
-            return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of());
+            return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
         }
         UUID familyId = membership.get().getFamily().getId();
         return new DataExport(now, account, familyService.getMine(user.getId()),
                 events(familyId, user.getId()), conversations(familyId), exchanges(familyId), bagItems(familyId),
-                openRequests(familyId));
+                expenses(familyId), settlements(familyId), openRequests(familyId));
     }
 
     private List<DataExport.Event> events(UUID familyId, UUID userId) {
@@ -122,6 +128,27 @@ public class DataExportService {
                 .map(x -> new DataExport.Exchange(x.getId(), firstName(x.getRequestedBy()), x.getTakeFrom(),
                         x.getTakeTo(), x.getGiveFrom(), x.getGiveTo(), x.getMessage(), x.getStatus().name(),
                         x.getCreatedAt(), x.getAnsweredAt()))
+                .toList();
+    }
+
+    private List<DataExport.Expense> expenses(UUID familyId) {
+        return expenseRepository
+                .findByFamilyIdAndStatusInOrderByPaidOnDescCreatedAtDesc(familyId, EnumSet.allOf(ExpenseStatus.class))
+                .stream()
+                .map(e -> new DataExport.Expense(e.getId(), e.getLabel(), e.getAmountCents(), e.getCategory().name(),
+                        e.getChildren().stream().map(Child::getFirstName).sorted().toList(), e.getPayerRole().name(),
+                        e.getPaidOn(), e.getPayerSharePercent(), e.getStatus().name(),
+                        e.getContestReason() == null ? null : e.getContestReason().name(), e.getContestNote(),
+                        firstName(e.getCreatedBy()), e.getCreatedAt()))
+                .toList();
+    }
+
+    private List<DataExport.Settlement> settlements(UUID familyId) {
+        return settlementRepository
+                .findByFamilyIdAndStatusInOrderByDeclaredAtDesc(familyId, EnumSet.allOf(SettlementStatus.class))
+                .stream()
+                .map(s -> new DataExport.Settlement(s.getId(), s.getPayerRole().name(), s.getAmountCents(),
+                        s.getStatus().name(), s.getDeclaredAt(), s.getAnsweredAt()))
                 .toList();
     }
 

@@ -3,6 +3,7 @@ package com.vynk.coparent_backend.family.service;
 import com.vynk.coparent_backend.auth.service.TokenService;
 import com.vynk.coparent_backend.common.ApiException;
 import com.vynk.coparent_backend.config.AuthProperties;
+import com.vynk.coparent_backend.expense.service.ExpenseService;
 import com.vynk.coparent_backend.family.dto.FamilyResponse;
 import com.vynk.coparent_backend.family.dto.InvitationPreviewResponse;
 import com.vynk.coparent_backend.family.dto.InvitationRequest;
@@ -43,6 +44,7 @@ public class InvitationService {
     private final FamilyAccess familyAccess;
     private final FamilyService familyService;
     private final CustodyScheduleService scheduleService;
+    private final ExpenseService expenseService;
     private final TokenService tokenService;
     private final AuthProperties properties;
     private final FamilyMapper mapper;
@@ -113,6 +115,7 @@ public class InvitationService {
         }
         invitation.accept(user, now);
         scheduleService.askNewParent(family, user);
+        expenseService.proposeToNewParent(family, user);
 
         return familyService.view(family, member);
     }

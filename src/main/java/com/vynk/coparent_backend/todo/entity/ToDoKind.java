@@ -5,6 +5,7 @@ public enum ToDoKind {
     CUSTODY_SCHEDULE,
     EXCHANGE,
     EXPENSE,
+    SETTLEMENT,
     MEMBER,
     DEVICE,
     PUBLICATION_REMOVAL,
