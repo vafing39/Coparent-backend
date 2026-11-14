@@ -139,7 +139,7 @@ public class DataExportService {
                         e.getChildren().stream().map(Child::getFirstName).sorted().toList(), e.getPayerRole().name(),
                         e.getPaidOn(), e.getPayerSharePercent(), e.getStatus().name(),
                         e.getContestReason() == null ? null : e.getContestReason().name(), e.getContestNote(),
-                        firstName(e.getCreatedBy()), e.getCreatedAt()))
+                        e.hasReceipt(), firstName(e.getCreatedBy()), e.getCreatedAt()))
                 .toList();
     }
 

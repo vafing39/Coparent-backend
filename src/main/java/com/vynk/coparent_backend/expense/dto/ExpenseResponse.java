@@ -13,7 +13,8 @@ import java.util.UUID;
 /**
  * Une dépense. {@code owedCents} : ce que l'autre parent doit au payeur. {@code mine} : j'en suis l'auteur.
  * {@code canAnswer} : je peux l'accepter ou la contester ; {@code canEdit} : je peux la corriger ou la retirer.
- * {@code authorFirstName} : null si le compte a été supprimé.
+ * {@code authorFirstName} : null si le compte a été supprimé. {@code receiptUpdatedAt} : null sans justificatif
+ * photo (l'app s'en sert aussi pour rafraîchir l'image).
  */
 public record ExpenseResponse(
         UUID id,
@@ -33,6 +34,7 @@ public record ExpenseResponse(
         boolean canEdit,
         ContestReason contestReason,
         String contestNote,
+        Instant receiptUpdatedAt,
         Instant createdAt,
         Instant answeredAt
 ) {

@@ -99,6 +99,12 @@ public class Expense {
     @Column(length = 500)
     private String contestNote;
 
+    /** Fichier du justificatif dans le stockage, null sans justificatif. */
+    @Column(length = 200)
+    private String receiptKey;
+
+    private Instant receiptUpdatedAt;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -118,9 +124,7 @@ public class Expense {
     /** Saisie ou correction : la dépense (re)passe en attente, sans contestation. */
     public void fill(String label, int amountCents, ExpenseCategory category, FamilyRole payerRole, LocalDate paidOn,
                      int payerSharePercent, Collection<Child> children) {
-        if (status != ExpenseStatus.PENDING && status != ExpenseStatus.CONTESTED) {
-            throw ApiException.conflict("Cette dépense ne peut plus être modifiée.");
-        }
+        requireEditable();
         this.label = label;
         this.amountCents = amountCents;
         this.category = category;
@@ -133,6 +137,34 @@ public class Expense {
         this.contestReason = null;
         this.contestNote = null;
         this.answeredAt = null;
+    }
+
+    /**
+     * Ajoute, remplace ou retire ({@code key} null) le justificatif : comme une correction, la dépense (re)passe en
+     * attente, sans contestation. Renvoie la clé du fichier remplacé, à supprimer du stockage.
+     */
+    public String replaceReceipt(String key, Instant now) {
+        requireEditable();
+        String previous = this.receiptKey;
+        this.receiptKey = key;
+        this.receiptUpdatedAt = key == null ? null : now;
+        this.status = ExpenseStatus.PENDING;
+        this.contestReason = null;
+        this.contestNote = null;
+        this.answeredAt = null;
+        return previous;
+    }
+
+    /** Dépense retirée : son justificatif n'a plus lieu d'être. Renvoie la clé du fichier à supprimer. */
+    public String replaceReceiptOnWithdrawn() {
+        String previous = this.receiptKey;
+        this.receiptKey = null;
+        this.receiptUpdatedAt = null;
+        return previous;
+    }
+
+    public boolean hasReceipt() {
+        return receiptKey != null;
     }
 
     public void accept(Instant now) {
@@ -166,6 +198,12 @@ public class Expense {
         return BigDecimal.valueOf((long) amountCents * (100 - payerSharePercent))
                 .divide(BigDecimal.valueOf(100), 0, RoundingMode.HALF_UP)
                 .intValueExact();
+    }
+
+    private void requireEditable() {
+        if (status != ExpenseStatus.PENDING && status != ExpenseStatus.CONTESTED) {
+            throw ApiException.conflict("Cette dépense ne peut plus être modifiée.");
+        }
     }
 
     private void requirePending() {

@@ -2,6 +2,8 @@ package com.vynk.coparent_backend.account.service;
 
 import com.vynk.coparent_backend.auth.repository.OneTimeTokenRepository;
 import com.vynk.coparent_backend.auth.repository.RefreshTokenRepository;
+import com.vynk.coparent_backend.common.storage.AfterCommit;
+import com.vynk.coparent_backend.common.storage.FileStorage;
 import com.vynk.coparent_backend.family.entity.FamilyMember;
 import com.vynk.coparent_backend.family.repository.FamilyMemberRepository;
 import com.vynk.coparent_backend.family.repository.FamilyRepository;
@@ -21,7 +23,8 @@ import java.util.UUID;
 /**
  * Deletes the personal data of deleted accounts once their 30 days are over (spec §1). The user row stays,
  * anonymised, so messages (whose hash chain uses the sender's id), events and history keep their author for the
- * other parent; its name becomes {@link #DELETED_NAME}. A family left without any active parent is deleted.
+ * other parent; its name becomes {@link #DELETED_NAME}. A family left without any active parent is deleted,
+ * with its receipt files.
  */
 @Slf4j
 @Component
@@ -36,6 +39,7 @@ public class AccountPurgeJob {
     private final OneTimeTokenRepository oneTimeTokenRepository;
     private final FamilyMemberRepository memberRepository;
     private final FamilyRepository familyRepository;
+    private final FileStorage storage;
     private final Clock clock;
 
     /** Every night at 3 a.m. (Paris). Returns the number of accounts purged. */
@@ -71,6 +75,7 @@ public class AccountPurgeJob {
                 .anyMatch(member -> member.getUser().isActive());
         if (!someoneLeft) {
             familyRepository.deleteFamily(familyId);
+            AfterCommit.run(() -> storage.deleteFolder("receipts/" + familyId));
         }
     }
 }

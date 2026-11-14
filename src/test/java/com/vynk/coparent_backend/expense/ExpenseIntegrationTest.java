@@ -3,6 +3,7 @@ package com.vynk.coparent_backend.expense;
 import com.jayway.jsonpath.JsonPath;
 import com.vynk.coparent_backend.auth.email.EmailSender;
 import com.vynk.coparent_backend.auth.service.RateLimiter;
+import com.vynk.coparent_backend.expense.service.ReceiptImagesTest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,26 +13,42 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Dépenses partagées, solde et virements, contre la base MySQL locale. Camille est A, Julien B. */
 @SpringBootTest(properties = {
         "app.auth.check-compromised-passwords=false",
-        "app.auth.jwt-secret=test-only-secret-that-is-at-least-32-bytes-long"
+        "app.auth.jwt-secret=test-only-secret-that-is-at-least-32-bytes-long",
+        "app.storage.dir=target/test-storage"
 })
 @AutoConfigureMockMvc
 class ExpenseIntegrationTest {
@@ -39,6 +56,7 @@ class ExpenseIntegrationTest {
     private static final String TEST_DOMAIN = "@test.coparent.invalid";
     private static final String PASSWORD = "correct-horse-battery";
     private static final String FAMILY = "{\"name\":\"Famille de Léa\",\"vacationZone\":\"A\"}";
+    private static final Path STORAGE = Path.of("target/test-storage");
     private static final LocalDate TODAY = LocalDate.now(ZoneId.of("Europe/Paris"));
 
     @Autowired
@@ -266,6 +284,105 @@ class ExpenseIntegrationTest {
     }
 
     @Test
+    void authorAddsAReceiptThatTheOtherParentSeesThenReplacesAndRemovesIt() throws Exception {
+        Account camille = verifiedUser("Camille");
+        Account julien = verifiedUser("Julien");
+        Family family = family(camille);
+        join(camille, julien, family);
+        String id = JsonPath.read(call(camille, HttpMethod.POST, family.expenses(),
+                        expense("Pharmacie", 1840, "PARENT_A", 50, family.childId()))
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        String path = family.expenses() + "/" + id;
+        call(camille, HttpMethod.GET, path, null).andExpect(jsonPath("$.receiptUpdatedAt", nullValue()));
+        call(julien, HttpMethod.GET, path + "/receipt", null).andExpect(status().isNotFound());
+
+        // Une photo de téléphone, avec position GPS : stockée sans aucune métadonnée
+        byte[] photo = ReceiptImagesTest.withExif(ReceiptImagesTest.jpeg(new BufferedImage(60, 40,
+                BufferedImage.TYPE_INT_RGB)), 6);
+        upload(camille, path, photo)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.receiptUpdatedAt", notNullValue()))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+        assertThat(receiptFiles(family)).hasSize(1);
+        byte[] stored = Files.readAllBytes(receiptFiles(family).getFirst());
+        assertThat(new String(stored, StandardCharsets.ISO_8859_1)).doesNotContain("Exif");
+
+        byte[] seen = call(julien, HttpMethod.GET, path + "/receipt", null)
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_JPEG))
+                .andExpect(header().string("Cache-Control", containsString("private")))
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(seen).isEqualTo(stored);
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(seen));
+        assertThat(image.getWidth()).isEqualTo(40);
+
+        // Julien n'est pas l'auteur
+        upload(julien, path, photo).andExpect(status().isConflict());
+        call(julien, HttpMethod.DELETE, path + "/receipt", null).andExpect(status().isConflict());
+
+        // Remplacée : l'ancien fichier disparaît
+        upload(camille, path, ReceiptImagesTest.jpeg(new BufferedImage(30, 30, BufferedImage.TYPE_INT_RGB)))
+                .andExpect(status().isOk());
+        assertThat(receiptFiles(family)).hasSize(1);
+        assertThat(Files.readAllBytes(receiptFiles(family).getFirst())).isNotEqualTo(stored);
+
+        // Retirée
+        call(camille, HttpMethod.DELETE, path + "/receipt", null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.receiptUpdatedAt", nullValue()));
+        assertThat(receiptFiles(family)).isEmpty();
+        call(julien, HttpMethod.GET, path + "/receipt", null).andExpect(status().isNotFound());
+        call(camille, HttpMethod.DELETE, path + "/receipt", null).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void receiptRulesFollowTheExpenseStatus() throws Exception {
+        Account camille = verifiedUser("Camille");
+        Account julien = verifiedUser("Julien");
+        Account stranger = verifiedUser("Inconnu");
+        Family family = family(camille);
+        join(camille, julien, family);
+        byte[] photo = ReceiptImagesTest.jpeg(new BufferedImage(20, 20, BufferedImage.TYPE_INT_RGB));
+
+        // Contestée pour un justificatif manquant : l'ajouter la remet en attente, chez l'autre parent
+        String contested = JsonPath.read(call(julien, HttpMethod.POST, family.expenses(),
+                        expense("Cantine", 6420, "PARENT_B", 50, family.childId()))
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        String path = family.expenses() + "/" + contested;
+        call(camille, HttpMethod.POST, path + "/contest", "{\"reason\":\"RECEIPT\"}").andExpect(status().isOk());
+        upload(julien, path, photo)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.contestReason", nullValue()));
+        call(julien, HttpMethod.GET, family.toDo(), null).andExpect(jsonPath("$.mine", hasSize(0)));
+        call(camille, HttpMethod.GET, family.toDo(), null).andExpect(jsonPath("$.mine", hasSize(1)));
+
+        // Pas une photo, pas de fichier, ou une autre famille
+        upload(julien, path, "%PDF-1.7".getBytes(StandardCharsets.UTF_8)).andExpect(status().isBadRequest());
+        mvc.perform(multipart(HttpMethod.PUT, path + "/receipt")
+                        .header("Authorization", "Bearer " + julien.accessToken()))
+                .andExpect(status().isBadRequest());
+        upload(stranger, path, photo).andExpect(status().isNotFound());
+        call(stranger, HttpMethod.GET, path + "/receipt", null).andExpect(status().isNotFound());
+
+        // Validée : le justificatif ne change plus, mais reste visible
+        call(camille, HttpMethod.POST, path + "/accept", null).andExpect(status().isOk());
+        upload(julien, path, photo).andExpect(status().isConflict());
+        call(julien, HttpMethod.DELETE, path + "/receipt", null).andExpect(status().isConflict());
+        call(camille, HttpMethod.GET, path + "/receipt", null).andExpect(status().isOk());
+
+        // Retirée : son fichier est supprimé
+        String withdrawn = JsonPath.read(call(julien, HttpMethod.POST, family.expenses(),
+                        expense("Lunettes", 12900, "PARENT_B", 50, family.childId()))
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        upload(julien, family.expenses() + "/" + withdrawn, photo).andExpect(status().isOk());
+        assertThat(receiptFiles(family)).hasSize(2);
+        call(julien, HttpMethod.POST, family.expenses() + "/" + withdrawn + "/withdraw", null)
+                .andExpect(status().isOk());
+        assertThat(receiptFiles(family)).hasSize(1);
+    }
+
+    @Test
     void invalidExpensesAreRefused() throws Exception {
         Account camille = verifiedUser("Camille");
         Account stranger = verifiedUser("Paul");
@@ -339,6 +456,22 @@ class ExpenseIntegrationTest {
         String link = JsonPath.read(invitation, "$.link");
         String token = link.substring(link.indexOf("token=") + "token=".length());
         call(invitee, HttpMethod.POST, "/api/v1/invitations/" + token + "/accept", null).andExpect(status().isOk());
+    }
+
+    private ResultActions upload(Account account, String expensePath, byte[] bytes) throws Exception {
+        return mvc.perform(multipart(HttpMethod.PUT, expensePath + "/receipt")
+                .file(new MockMultipartFile("file", "justificatif.jpg", "image/jpeg", bytes))
+                .header("Authorization", "Bearer " + account.accessToken()));
+    }
+
+    private static List<Path> receiptFiles(Family family) throws IOException {
+        Path folder = STORAGE.resolve("receipts").resolve(family.id());
+        if (!Files.isDirectory(folder)) {
+            return List.of();
+        }
+        try (Stream<Path> files = Files.list(folder)) {
+            return files.toList();
+        }
     }
 
     private ResultActions call(Account account, HttpMethod method, String path, String json) throws Exception {

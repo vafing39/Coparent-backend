@@ -1,6 +1,8 @@
 package com.vynk.coparent_backend.expense.service;
 
 import com.vynk.coparent_backend.common.ApiException;
+import com.vynk.coparent_backend.common.storage.AfterCommit;
+import com.vynk.coparent_backend.common.storage.FileStorage;
 import com.vynk.coparent_backend.expense.dto.ContestRequest;
 import com.vynk.coparent_backend.expense.dto.ExpenseRequest;
 import com.vynk.coparent_backend.expense.dto.ExpenseResponse;
@@ -47,6 +49,8 @@ public class ExpenseService {
     /** Part du payeur : 50/50, 60/40, 70/30, 100 %, ou l'inverse. */
     static final Set<Integer> PAYER_SHARES = Set.of(0, 30, 40, 50, 60, 70, 100);
     static final String NOT_FOUND = "Dépense introuvable.";
+    static final String NO_RECEIPT = "Cette dépense n'a pas de justificatif.";
+    static final String RECEIPT_AUTHOR_ONLY = "Seul le parent qui a ajouté la dépense peut changer son justificatif.";
     private static final List<ExpenseStatus> VISIBLE =
             List.of(ExpenseStatus.PENDING, ExpenseStatus.CONTESTED, ExpenseStatus.VALIDATED);
 
@@ -56,6 +60,8 @@ public class ExpenseService {
     private final ChildRepository childRepository;
     private final ExpenseRepository expenseRepository;
     private final ToDoItemRepository toDoRepository;
+    private final ReceiptImages receiptImages;
+    private final FileStorage storage;
     private final Clock clock;
 
     /** Toutes les dépenses sauf celles retirées, la plus récente d'abord. */
@@ -98,10 +104,8 @@ public class ExpenseService {
         Expense expense = find(familyId, expenseId);
         requireAuthor(expense, me, "Seul le parent qui a ajouté la dépense peut la corriger.");
         fill(expense, familyId, request);
-        resolveToDos(expense, clock.instant());
-        Optional<FamilyMember> other = otherParent(familyId, me);
-        other.ifPresent(o -> askAnswer(expense, me.getUser(), o.getUser()));
-        return toResponse(expense, me, other.isPresent());
+        reaskAnswer(expense, me);
+        return toResponse(expense, me, otherParent(familyId, me).isPresent());
     }
 
     @Transactional
@@ -142,7 +146,65 @@ public class ExpenseService {
         requireAuthor(expense, me, "Seul le parent qui a ajouté la dépense peut la retirer.");
         expense.withdraw();
         resolveToDos(expense, clock.instant());
+        if (expense.hasReceipt()) {
+            String key = expense.replaceReceiptOnWithdrawn();
+            AfterCommit.run(() -> storage.delete(key));
+        }
         return toResponse(expense, me, otherParent(familyId, me).isPresent());
+    }
+
+    /**
+     * Ajoute ou remplace le justificatif photo (l'auteur, dépense en attente ou contestée). L'image est nettoyée
+     * ({@link ReceiptImages}) avant d'être stockée ; une dépense contestée repasse en attente, comme une correction.
+     */
+    @Transactional
+    public ExpenseResponse putReceipt(UUID familyId, UUID userId, UUID expenseId, byte[] image) {
+        FamilyMember me = familyAccess.requireMember(familyId, userId);
+        lockFamily(familyId);
+        Expense expense = find(familyId, expenseId);
+        requireAuthor(expense, me, RECEIPT_AUTHOR_ONLY);
+        byte[] cleaned = receiptImages.clean(image);
+        String key = "receipts/" + familyId + "/" + expenseId + "-" + UUID.randomUUID() + ".jpg";
+        storage.put(key, cleaned);
+        try {
+            String previous = expense.replaceReceipt(key, clock.instant());
+            AfterCommit.run(() -> {
+                if (previous != null) {
+                    storage.delete(previous);
+                }
+            });
+        } catch (RuntimeException e) {
+            storage.delete(key);
+            throw e;
+        }
+        reaskAnswer(expense, me);
+        return toResponse(expense, me, otherParent(familyId, me).isPresent());
+    }
+
+    @Transactional
+    public ExpenseResponse deleteReceipt(UUID familyId, UUID userId, UUID expenseId) {
+        FamilyMember me = familyAccess.requireMember(familyId, userId);
+        lockFamily(familyId);
+        Expense expense = find(familyId, expenseId);
+        requireAuthor(expense, me, RECEIPT_AUTHOR_ONLY);
+        if (!expense.hasReceipt()) {
+            throw ApiException.notFound(NO_RECEIPT);
+        }
+        String previous = expense.replaceReceipt(null, clock.instant());
+        AfterCommit.run(() -> storage.delete(previous));
+        reaskAnswer(expense, me);
+        return toResponse(expense, me, otherParent(familyId, me).isPresent());
+    }
+
+    /** L'image du justificatif, pour les deux parents (404 sans justificatif ou pour une dépense retirée). */
+    @Transactional(readOnly = true)
+    public byte[] receipt(UUID familyId, UUID userId, UUID expenseId) {
+        familyAccess.requireMember(familyId, userId);
+        Expense expense = find(familyId, expenseId);
+        if (expense.getStatus() == ExpenseStatus.WITHDRAWN || !expense.hasReceipt()) {
+            throw ApiException.notFound(NO_RECEIPT);
+        }
+        return storage.get(expense.getReceiptKey()).orElseThrow(() -> ApiException.notFound(NO_RECEIPT));
     }
 
     /** Le second parent vient de rejoindre : les dépenses enregistrées en mode solo lui sont proposées. */
@@ -175,6 +237,12 @@ public class ExpenseService {
         }
         expense.fill(request.label().strip(), request.amountCents(), request.category(), request.payerRole(),
                 request.paidOn(), request.payerSharePercent(), children);
+    }
+
+    /** Après une correction : les tâches ouvertes sont résolues, puis la dépense revient chez l'autre parent. */
+    private void reaskAnswer(Expense expense, FamilyMember me) {
+        resolveToDos(expense, clock.instant());
+        otherParent(expense.getFamily().getId(), me).ifPresent(o -> askAnswer(expense, me.getUser(), o.getUser()));
     }
 
     private void askAnswer(Expense expense, User requester, User assignee) {
@@ -247,6 +315,7 @@ public class ExpenseService {
                 mine && open,
                 expense.getContestReason(),
                 expense.getContestNote(),
+                expense.getReceiptUpdatedAt(),
                 expense.getCreatedAt(),
                 expense.getAnsweredAt());
     }

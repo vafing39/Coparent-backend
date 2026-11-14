@@ -46,7 +46,8 @@ public record DataExport(
 
     public record Expense(UUID id, String label, int amountCents, String category, List<String> children,
                           String payerRole, LocalDate paidOn, int payerSharePercent, String status,
-                          String contestReason, String contestNote, String authorFirstName, Instant createdAt) {
+                          String contestReason, String contestNote, boolean hasReceipt, String authorFirstName,
+                          Instant createdAt) {
     }
 
     public record Settlement(UUID id, String payerRole, int amountCents, String status, Instant declaredAt,

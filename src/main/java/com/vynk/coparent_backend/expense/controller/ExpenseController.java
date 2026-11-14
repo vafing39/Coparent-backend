@@ -10,18 +10,25 @@ import com.vynk.coparent_backend.expense.service.BalanceService;
 import com.vynk.coparent_backend.expense.service.ExpenseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -74,6 +81,29 @@ public class ExpenseController {
     public ExpenseResponse withdraw(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
                                     @PathVariable UUID expenseId) {
         return expenseService.withdraw(familyId, userId(jwt), expenseId);
+    }
+
+    /** Ajoute ou remplace le justificatif photo (JPEG ou PNG, nettoyé de ses métadonnées avant stockage). */
+    @PutMapping(path = "/{expenseId}/receipt", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ExpenseResponse putReceipt(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                      @PathVariable UUID expenseId, @RequestPart("file") MultipartFile file)
+            throws IOException {
+        return expenseService.putReceipt(familyId, userId(jwt), expenseId, file.getBytes());
+    }
+
+    @DeleteMapping("/{expenseId}/receipt")
+    public ExpenseResponse deleteReceipt(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                         @PathVariable UUID expenseId) {
+        return expenseService.deleteReceipt(familyId, userId(jwt), expenseId);
+    }
+
+    @GetMapping("/{expenseId}/receipt")
+    public ResponseEntity<byte[]> receipt(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
+                                          @PathVariable UUID expenseId) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.noCache().cachePrivate())
+                .body(expenseService.receipt(familyId, userId(jwt), expenseId));
     }
 
     @GetMapping("/balance")
