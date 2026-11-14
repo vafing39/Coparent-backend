@@ -237,6 +237,38 @@ class FamilyOnboardingIntegrationTest {
         call(camille, HttpMethod.POST, invitePath, invite).andExpect(status().isConflict()); // two parents
     }
 
+    @Test
+    void soloFamilyShowsItsLatestInvitation() throws Exception {
+        String camille = verifiedUser("Camille");
+        String julien = verifiedUser("Julien");
+        String familyId = familyOf(camille);
+        String invitePath = "/api/v1/families/" + familyId + "/invitations";
+
+        call(camille, HttpMethod.GET, "/api/v1/families/me", null)
+                .andExpect(jsonPath("$.invitation").doesNotExist());
+
+        call(camille, HttpMethod.POST, invitePath, "{\"inviteeFirstName\":\"Juju\"}");
+        String token = tokenOf(call(camille, HttpMethod.POST, invitePath, "{\"inviteeFirstName\":\"Julien\"}")
+                .andReturn().getResponse().getContentAsString());
+        call(camille, HttpMethod.GET, "/api/v1/families/me", null)
+                .andExpect(jsonPath("$.invitation.inviteeFirstName").value("Julien")) // the newer link
+                .andExpect(jsonPath("$.invitation.sentAt").exists())
+                .andExpect(jsonPath("$.invitation.expiresAt").exists())
+                .andExpect(jsonPath("$.invitation.expired").value(false));
+
+        jdbc.update("UPDATE family_invitations SET expires_at = UTC_TIMESTAMP(6) - INTERVAL 1 MINUTE "
+                + "WHERE family_id = UUID_TO_BIN(?) AND revoked_at IS NULL", familyId);
+        call(camille, HttpMethod.GET, "/api/v1/families/me", null)
+                .andExpect(jsonPath("$.invitation.expired").value(true));
+
+        jdbc.update("UPDATE family_invitations SET expires_at = UTC_TIMESTAMP(6) + INTERVAL 1 DAY "
+                + "WHERE family_id = UUID_TO_BIN(?) AND revoked_at IS NULL", familyId);
+        call(julien, HttpMethod.POST, "/api/v1/invitations/" + token + "/accept", null).andExpect(status().isOk());
+        call(camille, HttpMethod.GET, "/api/v1/families/me", null)
+                .andExpect(jsonPath("$.solo").value(false))
+                .andExpect(jsonPath("$.invitation").doesNotExist());
+    }
+
     // --- helpers ---
 
     /** Signs up and returns the access token. */

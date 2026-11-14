@@ -20,6 +20,10 @@ public interface FamilyInvitationRepository extends JpaRepository<FamilyInvitati
     @Query("select i from FamilyInvitation i where i.tokenHash = :tokenHash")
     Optional<FamilyInvitation> findByTokenHashForUpdate(String tokenHash);
 
+    /** The latest link neither accepted nor replaced, expired or not. */
+    Optional<FamilyInvitation> findFirstByFamilyIdAndAcceptedAtIsNullAndRevokedAtIsNullOrderByCreatedAtDesc(
+            UUID familyId);
+
     /** A new link replaces the previous unused ones. */
     @Modifying
     @Query("update FamilyInvitation i set i.revokedAt = :now "

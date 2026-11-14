@@ -1,5 +1,6 @@
 package com.vynk.coparent_backend.family.mapper;
 
+import com.vynk.coparent_backend.family.dto.PendingInvitationResponse;
 import com.vynk.coparent_backend.family.dto.ChildResponse;
 import com.vynk.coparent_backend.family.dto.CustodyScheduleResponse;
 import com.vynk.coparent_backend.family.dto.FamilyResponse;
@@ -33,9 +34,10 @@ public interface FamilyMapper {
 
     /** The family as seen by {@code me}. */
     default FamilyResponse toResponse(Family family, FamilyMember me, List<FamilyMember> members,
-                                      List<Child> children, CustodySchedule schedule) {
+                                      List<Child> children, CustodySchedule schedule,
+                                      PendingInvitationResponse invitation) {
         return new FamilyResponse(family.getId(), family.getName(), family.getVacationZone(), me.getRole(),
                 members.size() < 2, toMemberResponses(members), toChildResponses(children),
-                schedule == null ? null : toResponse(schedule));
+                schedule == null ? null : toResponse(schedule), members.size() < 2 ? invitation : null);
     }
 }

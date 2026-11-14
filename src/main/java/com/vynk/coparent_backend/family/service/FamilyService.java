@@ -1,5 +1,8 @@
 package com.vynk.coparent_backend.family.service;
 
+import java.time.Clock;
+import com.vynk.coparent_backend.family.repository.FamilyInvitationRepository;
+import com.vynk.coparent_backend.family.dto.PendingInvitationResponse;
 import com.vynk.coparent_backend.common.ApiException;
 import com.vynk.coparent_backend.family.dto.FamilyRequest;
 import com.vynk.coparent_backend.family.dto.FamilyResponse;
@@ -36,7 +39,9 @@ public class FamilyService {
     private final CustodyScheduleRepository scheduleRepository;
     private final FamilyAccess familyAccess;
     private final UserService userService;
+    private final FamilyInvitationRepository invitationRepository;
     private final FamilyMapper mapper;
+    private final Clock clock;
 
     @Transactional
     public FamilyResponse create(UUID userId, FamilyRequest request) {
@@ -80,7 +85,12 @@ public class FamilyService {
         return mapper.toResponse(family, me,
                 memberRepository.findByFamilyIdOrderByRoleAsc(familyId),
                 childRepository.findByFamilyIdOrderByBirthDateAscCreatedAtAsc(familyId),
-                currentSchedule(familyId).orElse(null));
+                currentSchedule(familyId).orElse(null),
+                invitationRepository
+                        .findFirstByFamilyIdAndAcceptedAtIsNullAndRevokedAtIsNullOrderByCreatedAtDesc(familyId)
+                        .map(i -> new PendingInvitationResponse(i.getInviteeFirstName(), i.getCreatedAt(),
+                                i.getExpiresAt(), !clock.instant().isBefore(i.getExpiresAt())))
+                        .orElse(null));
     }
 
     /** The schedule in force, else the latest proposal (in solo mode the proposal applies until parent B joins). */

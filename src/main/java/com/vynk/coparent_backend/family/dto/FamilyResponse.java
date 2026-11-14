@@ -9,6 +9,7 @@ import java.util.UUID;
 /**
  * La famille vue par l'un de ses membres. {@code solo} : un seul parent pour l'instant.
  * {@code custodySchedule} : le rythme en vigueur, sinon le dernier proposé, sinon null.
+ * {@code invitation} : en mode solo, le dernier lien envoyé à l'autre parent, sinon null.
  */
 public record FamilyResponse(
         UUID id,
@@ -18,6 +19,7 @@ public record FamilyResponse(
         boolean solo,
         List<MemberResponse> members,
         List<ChildResponse> children,
-        CustodyScheduleResponse custodySchedule
+        CustodyScheduleResponse custodySchedule,
+        PendingInvitationResponse invitation
 ) {
 }
