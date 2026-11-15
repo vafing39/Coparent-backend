@@ -27,6 +27,8 @@ public class AppLinksController {
     /** Invitation tokens are 32 random bytes in base64url (43 characters). */
     private static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9_-]{20,128}");
     private static final String INVITATION_PATH = "/invitation";
+    /** Invitation d'un proche (famille élargie), envoyée par email. */
+    private static final String RELATIVE_PATH = "/rejoindre";
 
     private final LinksProperties links;
 
@@ -34,7 +36,7 @@ public class AppLinksController {
     public ResponseEntity<Map<String, Object>> appleAppSiteAssociation() {
         Map<String, Object> details = Map.of(
                 "appIDs", links.iosAppIds(),
-                "components", List.of(Map.of("/", INVITATION_PATH)));
+                "components", List.of(Map.of("/", INVITATION_PATH), Map.of("/", RELATIVE_PATH)));
         return verificationFile(Map.of("applinks", Map.of("details", List.of(details))));
     }
 
@@ -60,19 +62,40 @@ public class AppLinksController {
                 .body(invitationHtml(valid ? token : null));
     }
 
+    @GetMapping(value = RELATIVE_PATH, produces = MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
+    public ResponseEntity<String> relativePage(@RequestParam(required = false) String token) {
+        boolean valid = token != null && TOKEN.matcher(token).matches();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .header("Referrer-Policy", "no-referrer")
+                .header("X-Robots-Tag", "noindex")
+                .body(relativeHtml(valid ? token : null));
+    }
+
     private static <T> ResponseEntity<T> verificationFile(T body) {
         return ResponseEntity.ok().cacheControl(CacheControl.maxAge(Duration.ofHours(1))).body(body);
     }
 
     private String invitationHtml(String token) {
+        return page(token, "invitation", "Ouvrez-la dans l'application pour voir qui vous invite et rejoindre la famille.",
+                "Ce lien d'invitation est incomplet. Demandez un nouveau lien à l'autre parent.");
+    }
+
+    private String relativeHtml(String token) {
+        return page(token, "rejoindre", "Ouvrez-la dans l'application pour rejoindre le fil de la famille.",
+                "Ce lien d'invitation est incomplet. Demandez aux parents de vous renvoyer l'invitation.");
+    }
+
+    /** {@code appPath} : chemin du lien de l'app ({@code coparent://<appPath>?token=…}). */
+    private String page(String token, String appPath, String intro, String incomplete) {
         StringBuilder main = new StringBuilder();
         if (token != null) {
-            String appLink = links.appScheme() + "://invitation?token=" + token; // token checked: [A-Za-z0-9_-]
+            String appLink = links.appScheme() + "://" + appPath + "?token=" + token; // token checked: [A-Za-z0-9_-]
             main.append("""
                     <h1>Vous avez reçu une invitation</h1>
-                    <p>Ouvrez-la dans l'application pour voir qui vous invite et rejoindre la famille.</p>
+                    <p>%s</p>
                     <a class="button" href="%s">Ouvrir dans l'application</a>
-                    """.formatted(HtmlUtils.htmlEscape(appLink)));
+                    """.formatted(HtmlUtils.htmlEscape(intro), HtmlUtils.htmlEscape(appLink)));
             String stores = storeLinks();
             if (!stores.isEmpty()) {
                 main.append("<p class=\"secondary\">Pas encore l'application ? Installez-la, puis rouvrez ce lien.</p>")
@@ -81,8 +104,8 @@ public class AppLinksController {
         } else {
             main.append("""
                     <h1>Lien incomplet</h1>
-                    <p>Ce lien d'invitation est incomplet. Demandez un nouveau lien à l'autre parent.</p>
-                    """);
+                    <p>%s</p>
+                    """.formatted(HtmlUtils.htmlEscape(incomplete)));
         }
         return """
                 <!doctype html>

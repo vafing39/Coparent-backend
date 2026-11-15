@@ -45,6 +45,7 @@ public class InvitationService {
     private final FamilyService familyService;
     private final CustodyScheduleService scheduleService;
     private final ExpenseService expenseService;
+    private final RelativeService relativeService;
     private final TokenService tokenService;
     private final AuthProperties properties;
     private final FamilyMapper mapper;
@@ -116,6 +117,7 @@ public class InvitationService {
         invitation.accept(user, now);
         scheduleService.askNewParent(family, user);
         expenseService.proposeToNewParent(family, user);
+        relativeService.askNewParent(family, user);
 
         return familyService.view(family, member);
     }

@@ -1,6 +1,8 @@
 package com.vynk.coparent_backend.feed.dto;
 
 import com.vynk.coparent_backend.family.entity.FamilyRole;
+import com.vynk.coparent_backend.family.entity.RelativeRelation;
+import com.vynk.coparent_backend.feed.entity.PostCircle;
 import com.vynk.coparent_backend.feed.entity.ReactionKind;
 import com.vynk.coparent_backend.feed.entity.RemovalReason;
 
@@ -11,11 +13,16 @@ import java.util.UUID;
 /**
  * Une publication du fil. {@code removal} : null sauf si l'autre parent a demandé son retrait (elle est alors
  * masquée : l'app la montre réduite, avec les actions du retrait ; plus de réactions ni de commentaires).
- * {@code canDelete} : l'auteur ; {@code canRequestRemoval} : l'autre parent, tant qu'aucun retrait n'est demandé.
+ * {@code canDelete} : l'auteur ; {@code canRequestRemoval} : un parent qui n'en est pas l'auteur, tant qu'aucun
+ * retrait n'est demandé. Auteur : un parent ({@code authorRole}) ou un proche ({@code authorRelativeId},
+ * {@code authorRelation}). {@code circle} : PARENTS (« Partagé ») ou FAMILY.
  */
 public record PostResponse(
         UUID id,
+        PostCircle circle,
         FamilyRole authorRole,
+        UUID authorRelativeId,
+        RelativeRelation authorRelation,
         String authorFirstName,
         Instant createdAt,
         String body,

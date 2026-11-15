@@ -22,6 +22,8 @@ import com.vynk.coparent_backend.family.entity.FamilyMember;
 import com.vynk.coparent_backend.family.repository.ChildProfileRepository;
 import com.vynk.coparent_backend.family.repository.FamilyMemberRepository;
 import com.vynk.coparent_backend.family.service.FamilyService;
+import com.vynk.coparent_backend.family.entity.RelativeStatus;
+import com.vynk.coparent_backend.family.repository.FamilyRelativeRepository;
 import com.vynk.coparent_backend.feed.entity.Post;
 import com.vynk.coparent_backend.feed.repository.PostCommentRepository;
 import com.vynk.coparent_backend.feed.repository.PostReactionRepository;
@@ -57,6 +59,7 @@ public class DataExportService {
 
     private final UserRepository userRepository;
     private final FamilyMemberRepository memberRepository;
+    private final FamilyRelativeRepository relativeRepository;
     private final FamilyService familyService;
     private final EventRepository eventRepository;
     private final ConversationRepository conversationRepository;
@@ -96,12 +99,13 @@ public class DataExportService {
         Optional<FamilyMember> membership = memberRepository.findFirstByUserId(user.getId());
         if (membership.isEmpty()) {
             return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                    List.of(), List.of(), List.of(), List.of());
+                    List.of(), List.of(), List.of(), List.of(), List.of());
         }
         UUID familyId = membership.get().getFamily().getId();
         return new DataExport(now, account, familyService.getMine(user.getId()), childProfiles(familyId),
                 events(familyId, user.getId()), conversations(familyId), exchanges(familyId), bagItems(familyId),
-                expenses(familyId), settlements(familyId), documents(familyId), posts(familyId), openRequests(familyId));
+                expenses(familyId), settlements(familyId), documents(familyId), posts(familyId),
+                relatives(familyId), openRequests(familyId));
     }
 
     private List<DataExport.Event> events(UUID familyId, UUID userId) {
@@ -173,17 +177,29 @@ public class DataExportService {
         Map<UUID, List<String>> reactions = postReactionRepository
                 .findByPostIdIn(posts.stream().map(Post::getId).toList()).stream()
                 .collect(Collectors.groupingBy(r -> r.getPostId(),
-                        Collectors.mapping(r -> r.getKind().name() + " " + r.getRole().name(), Collectors.toList())));
+                        Collectors.mapping(r -> r.getKind().name() + " " + (r.getRole() != null ? r.getRole().name() : "RELATIVE"),
+                                Collectors.toList())));
         Map<UUID, List<DataExport.PostComment>> comments =
                 postCommentRepository.findByPostFamilyIdOrderByCreatedAtAsc(familyId).stream()
                         .collect(Collectors.groupingBy(c -> c.getPost().getId(),
-                                Collectors.mapping(c -> new DataExport.PostComment(firstName(c.getUser()), c.getBody(),
+                                Collectors.mapping(c -> new DataExport.PostComment(c.getRelative() != null
+                                        ? c.getRelative().getFirstName() : firstName(c.getUser()), c.getBody(),
                                         c.getCreatedAt()), Collectors.toList())));
         return posts.stream()
-                .map(p -> new DataExport.Post(p.getId(), firstName(p.getCreatedBy()), p.getBody(), p.isFirstTime(),
+                .map(p -> new DataExport.Post(p.getId(), p.getCircle().name(),
+                        p.getAuthorRelative() != null ? p.getAuthorRelative().getFirstName() : firstName(p.getCreatedBy()),
+                        p.getBody(), p.isFirstTime(),
                         p.getChildren().stream().map(Child::getFirstName).toList(), p.getPhotos().size(),
                         reactions.getOrDefault(p.getId(), List.of()), p.isHidden(), p.getCreatedAt(),
                         comments.getOrDefault(p.getId(), List.of())))
+                .toList();
+    }
+
+    private List<DataExport.Relative> relatives(UUID familyId) {
+        return relativeRepository.findByFamilyIdAndStatusInOrderByCreatedAtAsc(familyId,
+                        EnumSet.of(RelativeStatus.PROPOSED, RelativeStatus.INVITED, RelativeStatus.ACTIVE)).stream()
+                .map(r -> new DataExport.Relative(r.getFirstName(), r.getRelation().name(), r.getStatus().name(),
+                        r.getCreatedAt(), r.getJoinedAt()))
                 .toList();
     }
 

@@ -24,6 +24,7 @@ public record DataExport(
         List<Settlement> settlements,
         List<Document> documents,
         List<Post> posts,
+        List<Relative> relatives,
         List<ToDo> openRequests
 ) {
 
@@ -69,12 +70,17 @@ public record DataExport(
     }
 
     /** Une publication du fil (les photos ne sont pas jointes, seulement leur nombre). */
-    public record Post(UUID id, String authorFirstName, String body, boolean firstTime, List<String> children,
+    public record Post(UUID id, String circle, String authorFirstName, String body, boolean firstTime,
+                       List<String> children,
                        int photoCount, List<String> reactions, boolean hidden, Instant createdAt,
                        List<PostComment> comments) {
     }
 
     public record PostComment(String firstName, String body, Instant createdAt) {
+    }
+
+    /** Un proche de la famille élargie (actif ou en attente) ; son adresse n'est pas exportée. */
+    public record Relative(String firstName, String relation, String status, Instant createdAt, Instant joinedAt) {
     }
 
     public record DocumentEvent(String kind, String firstName, Instant at) {

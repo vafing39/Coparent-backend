@@ -2,6 +2,7 @@ package com.vynk.coparent_backend.feed.entity;
 
 import com.vynk.coparent_backend.family.entity.Child;
 import com.vynk.coparent_backend.family.entity.Family;
+import com.vynk.coparent_backend.family.entity.FamilyRelative;
 import com.vynk.coparent_backend.family.entity.FamilyRole;
 import com.vynk.coparent_backend.user.entity.User;
 import jakarta.persistence.CascadeType;
@@ -34,7 +35,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Une publication du fil : texte et/ou photos, les enfants concernés. Ne se modifie pas. Masquée quand l'autre parent
+ * Une publication du fil : texte et/ou photos, les enfants concernés, son cercle (« Partagé » ou « Famille »), par
+ * un parent ou un proche. Ne se modifie pas. Masquée quand l'autre parent
  * demande son retrait ({@code hiddenAt}), jusqu'à ce que l'auteur la supprime ou que la demande soit annulée.
  */
 @Entity
@@ -53,14 +55,23 @@ public class Post {
     @JoinColumn(name = "family_id", nullable = false, columnDefinition = "binary(16)")
     private Family family;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PostCircle circle;
+
     /** Null si le compte a été supprimé. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", columnDefinition = "binary(16)")
     private User createdBy;
 
+    /** Le parent auteur ; null pour un proche. */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private FamilyRole authorRole;
+
+    /** Le proche auteur ; null pour un parent. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "author_relative_id", columnDefinition = "binary(16)")
+    private FamilyRelative authorRelative;
 
     @Column(length = 2000)
     private String body;
@@ -92,11 +103,14 @@ public class Post {
     @OrderBy("position")
     private List<PostPhoto> photos = new ArrayList<>();
 
-    public Post(Family family, User createdBy, FamilyRole authorRole, String body, boolean firstTime,
-                Set<Child> children) {
+    /** {@code authorRole} pour un parent, {@code authorRelative} pour un proche (l'autre est null). */
+    public Post(Family family, PostCircle circle, User createdBy, FamilyRole authorRole,
+                FamilyRelative authorRelative, String body, boolean firstTime, Set<Child> children) {
         this.family = family;
+        this.circle = circle;
         this.createdBy = createdBy;
         this.authorRole = authorRole;
+        this.authorRelative = authorRelative;
         this.body = body;
         this.firstTime = firstTime;
         this.children = new LinkedHashSet<>(children);

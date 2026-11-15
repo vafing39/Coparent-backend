@@ -29,4 +29,11 @@ public class LoggingEmailSender implements EmailSender {
         // Never the content: it is personal data.
         log.info("[email] Data export for user {}: {} ({} bytes)", user.getId(), fileName, json.length);
     }
+
+    @Override
+    public void sendRelativeInvitation(String email, String firstName, String parentNames, String relation,
+                                       String link) {
+        // Never the address: it is personal data. The link lets a developer join without SMTP.
+        log.info("[email] Relative invitation link: {}", link);
+    }
 }

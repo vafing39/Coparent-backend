@@ -1,5 +1,6 @@
 package com.vynk.coparent_backend.feed.entity;
 
+import com.vynk.coparent_backend.family.entity.FamilyRelative;
 import com.vynk.coparent_backend.family.entity.FamilyRole;
 import com.vynk.coparent_backend.user.entity.User;
 import jakarta.persistence.Column;
@@ -43,9 +44,14 @@ public class PostComment {
     @JoinColumn(name = "user_id", columnDefinition = "binary(16)")
     private User user;
 
+    /** Le parent ; null pour un proche. */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private FamilyRole role;
+
+    /** Le proche ; null pour un parent. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "relative_id", columnDefinition = "binary(16)")
+    private FamilyRelative relative;
 
     @Column(nullable = false, length = 1000)
     private String body;
@@ -54,10 +60,11 @@ public class PostComment {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    public PostComment(Post post, User user, FamilyRole role, String body) {
+    public PostComment(Post post, User user, FamilyRole role, FamilyRelative relative, String body) {
         this.post = post;
         this.user = user;
         this.role = role;
+        this.relative = relative;
         this.body = body;
     }
 }

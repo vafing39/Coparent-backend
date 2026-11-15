@@ -6,6 +6,7 @@ import com.vynk.coparent_backend.auth.service.AuthService;
 import com.vynk.coparent_backend.auth.service.AuthSession;
 import com.vynk.coparent_backend.auth.service.PasswordPolicy;
 import com.vynk.coparent_backend.auth.service.RateLimiter;
+import com.vynk.coparent_backend.family.service.RelativeService;
 import com.vynk.coparent_backend.auth.service.RateLimiter.Action;
 import com.vynk.coparent_backend.common.ApiException;
 import com.vynk.coparent_backend.user.entity.User;
@@ -36,6 +37,7 @@ public class AccountService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordPolicy passwordPolicy;
     private final RateLimiter rateLimiter;
+    private final RelativeService relativeService;
     private final Clock clock;
 
     /** New password; every session is closed and a new one is returned, so this phone stays signed in. */
@@ -63,6 +65,7 @@ public class AccountService {
         user.setDeactivatedAt(now);
         user.setDeletionDueAt(now.plus(DELETION_DELAY));
         refreshTokenRepository.revokeAllForUser(user.getId(), now);
+        relativeService.leaveAll(user.getId());
     }
 
     private User activeUser(UUID userId) {

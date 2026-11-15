@@ -76,6 +76,33 @@ public class SmtpEmailSender implements EmailSender {
                 helper -> helper.addAttachment(fileName, new ByteArrayResource(json), "application/json"));
     }
 
+    @Async
+    @Override
+    public void sendRelativeInvitation(String email, String firstName, String parentNames, String relation,
+                                       String link) {
+        String greeting = "Bonjour " + firstName + ",";
+        String intro = parentNames + " vous invitent à rejoindre le fil de leur famille sur l'application Coparent, en "
+                + "tant que " + relation + ". Vous y verrez les photos et nouvelles des enfants qu'ils partagent "
+                + "avec la famille.";
+        String footer = "Ce lien est personnel, valable 14 jours et ne sert qu'une fois. Si vous ne connaissez pas "
+                + "cette famille, ignorez cet email.";
+        String text = greeting + "\n\n" + intro + "\n\nRejoindre la famille : " + link + "\n\n" + footer
+                + "\n\nL'équipe Coparent\n";
+        String html = """
+                <!doctype html>
+                <html lang="fr"><body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; color: #1f2937; line-height: 1.5;">
+                <p>%s</p>
+                <p>%s</p>
+                <p style="margin: 24px 0;"><a href="%s" style="display: inline-block; padding: 14px 24px; border-radius: 999px; background: #3F6B5C; color: #ffffff; font-weight: 700; text-decoration: none;">Rejoindre la famille</a></p>
+                <p style="font-size: 13px; color: #6b7280;">%s</p>
+                <p>L'équipe Coparent</p>
+                </body></html>
+                """.formatted(HtmlUtils.htmlEscape(greeting), HtmlUtils.htmlEscape(intro), HtmlUtils.htmlEscape(link),
+                HtmlUtils.htmlEscape(footer));
+        deliver(email, "relative invitation", "Invitation au fil de la famille", text, html, helper -> {
+        });
+    }
+
     /** An email whose only content is a code to type in the app (no link). */
     private void sendCode(User user, String subject, String intro, String code, String footer) {
         String greeting = "Bonjour " + user.getFirstName() + ",";
@@ -101,17 +128,23 @@ public class SmtpEmailSender implements EmailSender {
     }
 
     private void deliver(User user, String subject, String text, String html, Attachments attachments) {
+        deliver(user.getEmail(), "user " + user.getId(), subject, text, html, attachments);
+    }
+
+    /** {@code logTarget}: who the email is for in the logs, never the address. */
+    private void deliver(String to, String logTarget, String subject, String text, String html,
+                         Attachments attachments) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
             helper.setFrom(mailProperties.from());
-            helper.setTo(user.getEmail());
+            helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(text, html);
             attachments.add(helper);
             mailSender.send(message);
         } catch (MailException | MessagingException e) {
-            log.error("[email] Could not send \"{}\" to user {}: {}", subject, user.getId(), e.getMessage());
+            log.error("[email] Could not send \"{}\" to {}: {}", subject, logTarget, e.getMessage());
         }
     }
 

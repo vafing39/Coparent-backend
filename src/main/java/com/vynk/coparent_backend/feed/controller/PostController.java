@@ -5,6 +5,7 @@ import com.vynk.coparent_backend.feed.dto.PostCommentResponse;
 import com.vynk.coparent_backend.feed.dto.PostPageResponse;
 import com.vynk.coparent_backend.feed.dto.PostResponse;
 import com.vynk.coparent_backend.feed.dto.RemovalRequest;
+import com.vynk.coparent_backend.feed.entity.PostCircle;
 import com.vynk.coparent_backend.feed.entity.ReactionKind;
 import com.vynk.coparent_backend.feed.service.PostService;
 import jakarta.validation.Valid;
@@ -35,7 +36,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** Fil de la famille : publications, photos, réactions, commentaires, demandes de retrait. */
+/** Fil de la famille (parents et proches actifs) : publications, photos, réactions, commentaires, retraits. */
 @RestController
 @RequestMapping("/api/v1/families/{familyId}/posts")
 @RequiredArgsConstructor
@@ -53,20 +54,24 @@ public class PostController {
         return postService.page(familyId, userId(jwt), before, childId, firstTime, limit);
     }
 
-    /** Multipart : {@code body}, {@code childIds} (répété), {@code firstTime}, {@code photos} (répété, 6 au plus). */
+    /**
+     * Multipart : {@code body}, {@code childIds} (répété), {@code firstTime}, {@code circle} (PARENTS par défaut ;
+     * ignoré pour un proche, toujours FAMILY), {@code photos} (répété, 6 au plus).
+     */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public PostResponse publish(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID familyId,
                                 @RequestParam(required = false) String body,
                                 @RequestParam(required = false) List<UUID> childIds,
                                 @RequestParam(defaultValue = "false") boolean firstTime,
+                                @RequestParam(required = false) PostCircle circle,
                                 @RequestPart(name = "photos", required = false) List<MultipartFile> photos)
             throws IOException {
         List<byte[]> files = new ArrayList<>();
         for (MultipartFile photo : photos == null ? List.<MultipartFile>of() : photos) {
             files.add(photo.getBytes());
         }
-        return postService.publish(familyId, userId(jwt), body, childIds, firstTime, files);
+        return postService.publish(familyId, userId(jwt), body, childIds, firstTime, circle, files);
     }
 
     /** Une publication (ouverte depuis « À traiter »). */

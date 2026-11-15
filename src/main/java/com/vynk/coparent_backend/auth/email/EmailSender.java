@@ -13,4 +13,10 @@ public interface EmailSender {
 
     /** {@code json}: the user's personal data (spec §1), sent as an attachment named {@code fileName}. */
     void sendDataExport(User user, String fileName, byte[] json);
+
+    /**
+     * Invitation d'un proche (famille élargie), validée par les deux parents : {@code link} est le lien à usage
+     * unique qui ouvre l'application. Envoyée à une adresse qui n'a pas forcément de compte.
+     */
+    void sendRelativeInvitation(String email, String firstName, String parentNames, String relation, String link);
 }

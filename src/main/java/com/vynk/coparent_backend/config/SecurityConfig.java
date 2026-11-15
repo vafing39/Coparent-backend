@@ -39,9 +39,10 @@ public class SecurityConfig {
                         .authenticated()
                         .requestMatchers("/api/v1/auth/**", "/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/invitations/*").permitAll() // aperçu avant acceptation
+                        .requestMatchers(HttpMethod.GET, "/api/v1/relative-invitations/*").permitAll()
                         // Lien d'invitation ouvert dans l'app : fichiers de vérification et page web d'atterrissage.
                         .requestMatchers(HttpMethod.GET, "/.well-known/apple-app-site-association",
-                                "/.well-known/assetlinks.json", "/invitation").permitAll()
+                                "/.well-known/assetlinks.json", "/invitation", "/rejoindre").permitAll()
                         // WebSocket de la messagerie : le jeton est vérifié au CONNECT STOMP (StompAuthInterceptor).
                         .requestMatchers("/ws").permitAll()
                         // Fichier d'un document : le lien temporaire signé fait office d'autorisation (DocumentLinks).

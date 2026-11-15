@@ -12,7 +12,7 @@ import java.util.UUID;
 
 public interface PostCommentRepository extends JpaRepository<PostComment, UUID> {
 
-    @EntityGraph(attributePaths = "user")
+    @EntityGraph(attributePaths = {"user", "relative"})
     List<PostComment> findByPostIdOrderByCreatedAtAsc(UUID postId);
 
     /** Nombre de commentaires par publication : [postId, nombre]. */
