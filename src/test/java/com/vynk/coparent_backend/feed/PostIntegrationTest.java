@@ -279,6 +279,50 @@ class PostIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void theAlbumHoldsAChildsVisiblePhotosYearByYear() throws Exception {
+        Account camille = verifiedUser("Camille");
+        Account julien = verifiedUser("Julien");
+        Account stranger = verifiedUser("Paul");
+        Family family = family(camille);
+        join(camille, julien, family);
+        String hugo = JsonPath.read(call(camille, HttpMethod.POST, "/api/v1/families/" + family.id() + "/children",
+                "{\"firstName\":\"Hugo\",\"birthDate\":\"2021-08-21\"}")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.id");
+        byte[] photo = PhotoCleanerTest.jpeg(new BufferedImage(30, 20, BufferedImage.TYPE_INT_RGB));
+        String album = "/api/v1/families/" + family.id() + "/album?childId=";
+
+        String recent = JsonPath.read(publish(camille, family, "Vélo", List.of(family.childId()), true, photo, photo)
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        String old = JsonPath.read(publish(julien, family, "Plage", List.of(family.childId(), hugo), false, photo)
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        jdbc.update("UPDATE posts SET created_at = '2025-07-14 10:00:00' WHERE id = UUID_TO_BIN(?)", old);
+        publish(julien, family, "Judo", List.of(hugo), false, photo);
+        publish(camille, family, "Sans photo", List.of(family.childId()), false);
+        String hidden = JsonPath.read(publish(camille, family, "Masquée", List.of(family.childId()), false, photo)
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        call(julien, HttpMethod.POST, family.posts() + "/" + hidden + "/removal", null).andExpect(status().isOk());
+
+        // L'année la plus récente par défaut ; les photos de Hugo et la publication masquée n'y sont pas
+        call(julien, HttpMethod.GET, album + family.childId(), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.years", hasSize(2)))
+                .andExpect(jsonPath("$.years[1]").value(2025))
+                .andExpect(jsonPath("$.photos", hasSize(2)))
+                .andExpect(jsonPath("$.photos[0].postId").value(recent))
+                .andExpect(jsonPath("$.photos[0].width").value(30));
+        call(camille, HttpMethod.GET, album + family.childId() + "&year=2025", null)
+                .andExpect(jsonPath("$.year").value(2025))
+                .andExpect(jsonPath("$.photos", hasSize(1)))
+                .andExpect(jsonPath("$.photos[0].postId").value(old));
+        call(camille, HttpMethod.GET, album + hugo + "&year=2025", null)
+                .andExpect(jsonPath("$.photos", hasSize(1)));
+        call(camille, HttpMethod.GET, album + UUID.randomUUID(), null)
+                .andExpect(jsonPath("$.years", hasSize(0)))
+                .andExpect(jsonPath("$.year").doesNotExist());
+        call(stranger, HttpMethod.GET, album + family.childId(), null).andExpect(status().isNotFound());
+    }
+
     private ResultActions publish(Account account, Family family, String text, List<String> childIds,
                                   boolean firstTime, byte[]... photos) throws Exception {
         MockMultipartHttpServletRequestBuilder builder = multipart(family.posts());

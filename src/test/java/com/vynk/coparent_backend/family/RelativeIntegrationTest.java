@@ -307,6 +307,23 @@ class RelativeIntegrationTest {
                 .andExpect(status().isOk());
         call(camille, HttpMethod.POST, family.posts() + "/" + odilePost + "/comments", "{\"body\":\"Merci\"}")
                 .andExpect(status().isCreated());
+        // Album : un proche ne voit que les photos du cercle « Famille »
+        byte[] photo = com.vynk.coparent_backend.common.storage.PhotoCleanerTest.jpeg(
+                new java.awt.image.BufferedImage(20, 20, java.awt.image.BufferedImage.TYPE_INT_RGB));
+        for (String circle : List.of("FAMILY", "PARENTS")) {
+            mvc.perform(multipart(family.posts())
+                            .file(new org.springframework.mock.web.MockMultipartFile("photos", "p.jpg", "image/jpeg",
+                                    photo))
+                            .param("childIds", family.childId()).param("circle", circle)
+                            .header("Authorization", "Bearer " + camille.accessToken()))
+                    .andExpect(status().isCreated());
+        }
+        call(odile, HttpMethod.GET, family.path() + "/album?childId=" + family.childId(), null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photos", hasSize(1)));
+        call(julien, HttpMethod.GET, family.path() + "/album?childId=" + family.childId(), null)
+                .andExpect(jsonPath("$.photos", hasSize(2)));
+
         // Quitter la famille ne retire pas ses publications de son export
         call(odile, HttpMethod.DELETE, "/api/v1/users/me/relative-families/" + family.id(), null)
                 .andExpect(status().isNoContent());
