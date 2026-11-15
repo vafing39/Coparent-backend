@@ -22,4 +22,12 @@ public interface PostCommentRepository extends JpaRepository<PostComment, UUID> 
     /** Export de données. */
     @EntityGraph(attributePaths = {"user", "post"})
     List<PostComment> findByPostFamilyIdOrderByCreatedAtAsc(UUID familyId);
+
+    /** Export de données d'un proche : les commentaires de ses publications. */
+    @EntityGraph(attributePaths = {"user", "relative", "post"})
+    List<PostComment> findByPostIdInOrderByCreatedAtAsc(Collection<UUID> postIds);
+
+    /** Export de données d'un proche : ses commentaires. */
+    @EntityGraph(attributePaths = {"post"})
+    List<PostComment> findByRelativeIdOrderByCreatedAtAsc(UUID relativeId);
 }

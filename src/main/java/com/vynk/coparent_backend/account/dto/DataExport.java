@@ -9,7 +9,8 @@ import java.util.UUID;
 
 /**
  * Personal data of one user (spec §1), sent by email as JSON: the account, then what the user sees in the app.
- * The other parent's private events are never included.
+ * The other parent's private events are never included. A relative (wider family) has no {@code family}: their
+ * data are in {@code relativeFamilies}.
  */
 public record DataExport(
         Instant exportedAt,
@@ -25,7 +26,8 @@ public record DataExport(
         List<Document> documents,
         List<Post> posts,
         List<Relative> relatives,
-        List<ToDo> openRequests
+        List<ToDo> openRequests,
+        List<RelativeFamily> relativeFamilies
 ) {
 
     public record Account(UUID id, String email, String firstName, Instant emailVerifiedAt, Instant createdAt) {
@@ -81,6 +83,21 @@ public record DataExport(
 
     /** Un proche de la famille élargie (actif ou en attente) ; son adresse n'est pas exportée. */
     public record Relative(String firstName, String relation, String status, Instant createdAt, Instant joinedAt) {
+    }
+
+    /**
+     * Une famille dont l'utilisateur est (ou a été) un proche : son lien, ses publications (avec leurs réactions et
+     * commentaires), ses commentaires et ses réactions. Les publications des autres ne sont pas exportées.
+     */
+    public record RelativeFamily(String familyName, String firstName, String relation, String status,
+                                 Instant joinedAt, Instant endedAt, List<Post> posts,
+                                 List<RelativeComment> comments, List<RelativeReaction> reactions) {
+    }
+
+    public record RelativeComment(UUID postId, String body, Instant createdAt) {
+    }
+
+    public record RelativeReaction(UUID postId, String kind, Instant createdAt) {
     }
 
     public record DocumentEvent(String kind, String firstName, Instant at) {

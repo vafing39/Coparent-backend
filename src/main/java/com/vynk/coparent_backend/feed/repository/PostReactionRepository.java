@@ -10,4 +10,7 @@ import java.util.UUID;
 public interface PostReactionRepository extends JpaRepository<PostReaction, PostReaction.Key> {
 
     List<PostReaction> findByPostIdIn(Collection<UUID> postIds);
+
+    /** Export de données d'un proche : ses réactions. */
+    List<PostReaction> findByRelativeIdOrderByCreatedAtAsc(UUID relativeId);
 }

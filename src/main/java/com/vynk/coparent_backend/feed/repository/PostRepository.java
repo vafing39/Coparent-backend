@@ -36,4 +36,8 @@ public interface PostRepository extends JpaRepository<Post, UUID> {
     /** Export de données. */
     @EntityGraph(attributePaths = {"createdBy", "authorRelative"})
     List<Post> findByFamilyIdOrderByCreatedAtDesc(UUID familyId);
+
+    /** Export de données d'un proche : ses publications dans une famille. */
+    @EntityGraph(attributePaths = {"authorRelative"})
+    List<Post> findByAuthorRelativeIdOrderByCreatedAtDesc(UUID relativeId);
 }

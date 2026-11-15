@@ -3,6 +3,7 @@ package com.vynk.coparent_backend.family;
 import com.jayway.jsonpath.JsonPath;
 import com.vynk.coparent_backend.auth.email.EmailSender;
 import com.vynk.coparent_backend.auth.service.RateLimiter;
+import com.vynk.coparent_backend.user.entity.User;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
@@ -277,6 +280,55 @@ class RelativeIntegrationTest {
         call(gerard, HttpMethod.GET, family.posts(), null).andExpect(status().isNotFound());
         call(gerard, HttpMethod.DELETE, "/api/v1/users/me/relative-families/" + family.id(), null)
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void aRelativesDataExportHoldsTheirFamiliesPostsCommentsAndReactions() throws Exception {
+        Account camille = verifiedUser("Camille");
+        Account julien = verifiedUser("Julien");
+        Account odile = verifiedUser("Odile");
+        Family family = family(camille);
+        join(camille, julien, family);
+        String relativeId = JsonPath.read(propose(camille, family, "Mamie Odile", odile.email(), "GRANDPARENT")
+                .andReturn().getResponse().getContentAsString(), "$.id");
+        call(julien, HttpMethod.POST, family.relatives() + "/" + relativeId + "/approve", null)
+                .andExpect(status().isOk());
+        call(odile, HttpMethod.POST, "/api/v1/relative-invitations/" + sentToken(odile.email()) + "/accept", null)
+                .andExpect(status().isOk());
+
+        String camillePost = JsonPath.read(publish(camille, family, "Léa à vélo", "FAMILY")
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.id");
+        publish(camille, family, "Entre parents", "PARENTS").andExpect(status().isCreated());
+        String odilePost = JsonPath.read(publish(odile, family, "Bravo ma chérie", null)
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.id");
+        call(odile, HttpMethod.POST, family.posts() + "/" + camillePost + "/comments", "{\"body\":\"Magnifique\"}")
+                .andExpect(status().isCreated());
+        call(odile, HttpMethod.PUT, family.posts() + "/" + camillePost + "/reactions/HEART", null)
+                .andExpect(status().isOk());
+        call(camille, HttpMethod.POST, family.posts() + "/" + odilePost + "/comments", "{\"body\":\"Merci\"}")
+                .andExpect(status().isCreated());
+        // Quitter la famille ne retire pas ses publications de son export
+        call(odile, HttpMethod.DELETE, "/api/v1/users/me/relative-families/" + family.id(), null)
+                .andExpect(status().isNoContent());
+
+        call(odile, HttpMethod.POST, "/api/v1/users/me/data-export", null).andExpect(status().isAccepted());
+        ArgumentCaptor<byte[]> json = ArgumentCaptor.forClass(byte[].class);
+        verify(emailSender).sendDataExport(any(User.class), anyString(), json.capture());
+        String export = new String(json.getValue(), StandardCharsets.UTF_8);
+
+        assertThat((Object) JsonPath.read(export, "$.family")).isNull();
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].familyName")).isEqualTo("Famille de Léa");
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].relation")).isEqualTo("GRANDPARENT");
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].status")).isEqualTo("LEFT");
+        List<String> bodies = JsonPath.read(export, "$.relativeFamilies[0].posts[*].body");
+        assertThat(bodies).containsExactly("Bravo ma chérie");
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].posts[0].circle")).isEqualTo("FAMILY");
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].posts[0].comments[0].firstName"))
+                .isEqualTo("Camille");
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].comments[0].body")).isEqualTo("Magnifique");
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].comments[0].postId")).isEqualTo(camillePost);
+        assertThat((String) JsonPath.read(export, "$.relativeFamilies[0].reactions[0].kind")).isEqualTo("HEART");
+        assertThat(export).doesNotContain("Entre parents").doesNotContain("Léa à vélo");
     }
 
     private ResultActions propose(Account parent, Family family, String firstName, String email, String relation)

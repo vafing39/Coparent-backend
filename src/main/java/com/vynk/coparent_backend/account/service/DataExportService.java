@@ -19,12 +19,14 @@ import com.vynk.coparent_backend.expense.repository.SettlementRepository;
 import com.vynk.coparent_backend.exchange.repository.CustodyExchangeRepository;
 import com.vynk.coparent_backend.family.entity.Child;
 import com.vynk.coparent_backend.family.entity.FamilyMember;
+import com.vynk.coparent_backend.family.entity.FamilyRelative;
 import com.vynk.coparent_backend.family.repository.ChildProfileRepository;
 import com.vynk.coparent_backend.family.repository.FamilyMemberRepository;
 import com.vynk.coparent_backend.family.service.FamilyService;
 import com.vynk.coparent_backend.family.entity.RelativeStatus;
 import com.vynk.coparent_backend.family.repository.FamilyRelativeRepository;
 import com.vynk.coparent_backend.feed.entity.Post;
+import com.vynk.coparent_backend.feed.entity.PostComment;
 import com.vynk.coparent_backend.feed.repository.PostCommentRepository;
 import com.vynk.coparent_backend.feed.repository.PostReactionRepository;
 import com.vynk.coparent_backend.feed.repository.PostRepository;
@@ -97,15 +99,45 @@ public class DataExportService {
         DataExport.Account account = new DataExport.Account(user.getId(), user.getEmail(), user.getFirstName(),
                 user.getEmailVerifiedAt(), user.getCreatedAt());
         Optional<FamilyMember> membership = memberRepository.findFirstByUserId(user.getId());
+        List<DataExport.RelativeFamily> relativeFamilies = relativeFamilies(user.getId());
         if (membership.isEmpty()) {
             return new DataExport(now, account, null, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                    List.of(), List.of(), List.of(), List.of(), List.of());
+                    List.of(), List.of(), List.of(), List.of(), List.of(), relativeFamilies);
         }
         UUID familyId = membership.get().getFamily().getId();
         return new DataExport(now, account, familyService.getMine(user.getId()), childProfiles(familyId),
                 events(familyId, user.getId()), conversations(familyId), exchanges(familyId), bagItems(familyId),
                 expenses(familyId), settlements(familyId), documents(familyId), posts(familyId),
-                relatives(familyId), openRequests(familyId));
+                relatives(familyId), openRequests(familyId), relativeFamilies);
+    }
+
+    /** Familles dont l'utilisateur est ou a été un proche (rejointes, puis quittées ou retiré). */
+    private List<DataExport.RelativeFamily> relativeFamilies(UUID userId) {
+        return relativeRepository.findByUserIdAndStatusIn(userId,
+                        EnumSet.of(RelativeStatus.ACTIVE, RelativeStatus.REMOVED, RelativeStatus.LEFT)).stream()
+                .sorted(Comparator.comparing(FamilyRelative::getJoinedAt,
+                        Comparator.nullsLast(Comparator.naturalOrder())))
+                .map(this::relativeFamily)
+                .toList();
+    }
+
+    private DataExport.RelativeFamily relativeFamily(FamilyRelative relative) {
+        List<Post> posts = postRepository.findByAuthorRelativeIdOrderByCreatedAtDesc(relative.getId());
+        List<UUID> postIds = posts.stream().map(Post::getId).toList();
+        List<DataExport.RelativeComment> comments =
+                postCommentRepository.findByRelativeIdOrderByCreatedAtAsc(relative.getId()).stream()
+                        .map(c -> new DataExport.RelativeComment(c.getPost().getId(), c.getBody(), c.getCreatedAt()))
+                        .toList();
+        List<DataExport.RelativeReaction> reactions =
+                postReactionRepository.findByRelativeIdOrderByCreatedAtAsc(relative.getId()).stream()
+                        .map(r -> new DataExport.RelativeReaction(r.getPostId(), r.getKind().name(), r.getCreatedAt()))
+                        .toList();
+        return new DataExport.RelativeFamily(relative.getFamily().getName(), relative.getFirstName(),
+                relative.getRelation().name(), relative.getStatus().name(), relative.getJoinedAt(),
+                relative.getEndedAt(),
+                exportPosts(posts, postIds.isEmpty() ? List.of()
+                        : postCommentRepository.findByPostIdInOrderByCreatedAtAsc(postIds)),
+                comments, reactions);
     }
 
     private List<DataExport.Event> events(UUID familyId, UUID userId) {
@@ -173,14 +205,22 @@ public class DataExportService {
     }
 
     private List<DataExport.Post> posts(UUID familyId) {
-        List<Post> posts = postRepository.findByFamilyIdOrderByCreatedAtDesc(familyId);
+        return exportPosts(postRepository.findByFamilyIdOrderByCreatedAtDesc(familyId),
+                postCommentRepository.findByPostFamilyIdOrderByCreatedAtAsc(familyId));
+    }
+
+    /** Publications avec leurs réactions et les commentaires donnés (ceux de ces publications). */
+    private List<DataExport.Post> exportPosts(List<Post> posts, List<PostComment> postComments) {
+        if (posts.isEmpty()) {
+            return List.of();
+        }
         Map<UUID, List<String>> reactions = postReactionRepository
                 .findByPostIdIn(posts.stream().map(Post::getId).toList()).stream()
                 .collect(Collectors.groupingBy(r -> r.getPostId(),
                         Collectors.mapping(r -> r.getKind().name() + " " + (r.getRole() != null ? r.getRole().name() : "RELATIVE"),
                                 Collectors.toList())));
         Map<UUID, List<DataExport.PostComment>> comments =
-                postCommentRepository.findByPostFamilyIdOrderByCreatedAtAsc(familyId).stream()
+                postComments.stream()
                         .collect(Collectors.groupingBy(c -> c.getPost().getId(),
                                 Collectors.mapping(c -> new DataExport.PostComment(c.getRelative() != null
                                         ? c.getRelative().getFirstName() : firstName(c.getUser()), c.getBody(),
